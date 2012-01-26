@@ -2,7 +2,8 @@ require 'chef/node'
 require 'mongo'
 
 class Chef
-  # Originally CouchDB class
+  # Originally the CouchDB class. CouchDB databases directly map to one collection of a
+  # MongoDB database.
   #
   # TODO: decide how to handle conn error
   # TODO: Decide whether UUIDTools is **REALLY** needed or not since Mongo Ruby creates unique _id
@@ -32,11 +33,18 @@ class Chef
       @db.name
     end
 
-    def find_by_name(obj_type, name)
-      result = find_one({obj_type => name})
+    # Finds an object with the given chef_type and name from the database.
+    #
+    # === Returns
+    # Object or a Hash
+    #
+    # === Raises
+    # Chef::Exceptions::CouchDBNotFound if no match was found.
+    def find_by_name(chef_type, name)
+      result = @coll.find_one({ :chef_type => chef_type, :name => name })
 
       if result.nil? then
-        raise Chef::Exceptions::CouchDBNotFound, "Cannot find #{obj_type} #{name} in DB!"
+        raise Chef::Exceptions::CouchDBNotFound, "Cannot find #{chef_type} #{name} in DB!"
       end
 
       # TODO: Confirm this is correct
@@ -64,13 +72,14 @@ class Chef
       end
     end
 
-    # Save the object to db. Add to index if the object supports it.
+    # Saves the object to db. Add to index if the object supports it.
     #
-    # Returns the _id of the object
-    def store(obj_type, name, object)
+    # === Returns
+    # The _id of the object
+    def store(chef_type, name, object)
       validate(
         {
-          :obj_type => obj_type,
+          :obj_type => chef_type,
           :name => name,
           :object => object,
         },
@@ -79,11 +88,13 @@ class Chef
         }
       )
 
-      id = @coll.update({ obj_type => name }, object, :upsert => true)
+      query_selector = { :chef_type => chef_type, :name => name }
+      @coll.update(query_selector, object, :upsert => true)
+      id = @coll.find_one(query_selector)["_id"]
 
       if object.respond_to?(:add_to_index)
-        Chef::Log.info("Sending #{obj_type}(#{id}) to the index queue for addition.")
-        object.add_to_index(:database => database, :id => id, :type => obj_type)
+        Chef::Log.info("Sending #{chef_type}(#{id}) to the index queue for addition.")
+        object.add_to_index(:database => database, :id => id, :type => chef_type)
       end
 
       id
@@ -99,17 +110,18 @@ class Chef
           :obj_type => { :kind_of => String },
           :name => { :kind_of => String },
         }
-               )
+      )
+
       doc = find_by_name(obj_type, name)
       # TODO: confirm correct transform of doc.couchdb = self if doc.respond_to?(:couchdb)
       doc.db = self if doc.respond_to?(:db)
       doc
     end
 
-    def delete(obj_type, name)
+    def delete(chef_type, name)
       validate(
         {
-          :obj_type => obj_type,
+          :obj_type => chef_type,
           :name => name,
         },
         {
@@ -118,22 +130,26 @@ class Chef
         }
       )
 
-      object = find_by_name(obj_type, name)
-      @coll.remove({ obj_type => name })
+      object = find_by_name(chef_type, name)
+      @coll.remove({ :chef_type => chef_type, :name => name })
 
       if object.respond_to?(:delete_from_index)
-        Chef::Log.info("Sending #{obj_type}(#{id}) to the index queue for deletion..")
-        object.delete_from_index(:database => database, :id => object["_id"], :type => obj_type)
+        Chef::Log.info("Sending #{chef_type}(#{id}) to the index queue for deletion..")
+        object.delete_from_index(:database => database, :id => object["_id"], :type => chef_type)
       end
     end
 
     # TODO: determine whether BSON::ObjectId() wrapping is needed
+    # TODO: determine whether it makes sense to just return the cursor to 
+    #   potentially conserve memory and improve latency
     def bulk_get(*to_fetch)
-      @coll.find({ "_id" => { "$in" => to_fetch } }).to_a
+      @coll.find({ "_id" => { "$in" => to_fetch.flatten } }).to_a
     end
 
     # Not needed in Mongo: 
     # create_db, create_design_document, create_id_map
+
+    # Note: find replaces CouchDB#get_view, CouchDB#list
 
     # Unused, other than in tests:
     # view_uri, server_stats, db_stats
