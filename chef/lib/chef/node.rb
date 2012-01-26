@@ -29,7 +29,7 @@ require 'chef/mixin/from_file'
 require 'chef/mixin/language_include_attribute'
 require 'chef/mixin/deep_merge'
 require 'chef/environment'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/rest'
 require 'chef/run_list'
 require 'chef/node/attribute'
@@ -47,7 +47,7 @@ class Chef
 
     attr_accessor :recipe_list, :couchdb, :couchdb_rev, :run_state, :run_list
     attr_accessor :override_attrs, :default_attrs, :normal_attrs, :automatic_attrs
-    attr_reader :couchdb_id
+    attr_reader :id
 
     # TODO: 5/18/2010 cw/timh. cookbook_collection should be removed
     # from here and for any place it's needed, it should be accessed
@@ -153,6 +153,8 @@ class Chef
       },
     }
 
+    DB = Chef::DB.new(nil, "node")
+
     # Create a new Chef::Node object.
     def initialize(couchdb=nil)
       @name = nil
@@ -164,10 +166,6 @@ class Chef
       @automatic_attrs = Mash.new
       @run_list = Chef::RunList.new
 
-      @couchdb_rev = nil
-      @couchdb_id = nil
-      @couchdb = couchdb || Chef::CouchDB.new
-
       @run_state = {
         :template_cache => Hash.new,
         :seen_recipes => Hash.new,
@@ -178,8 +176,8 @@ class Chef
       @cookbook_collection = CookbookCollection.new
     end
 
-    def couchdb_id=(value)
-      @couchdb_id = value
+    def id=(value)
+      @id = value
       @index_id = value
     end
 
@@ -497,7 +495,7 @@ class Chef
         "override" => override_attrs,
         "run_list" => run_list.run_list
       }
-      result["_rev"] = couchdb_rev if couchdb_rev
+
       result.to_json(*a)
     end
 
@@ -529,15 +527,33 @@ class Chef
       else
         o["recipes"].each { |r| node.recipes << r }
       end
-      node.couchdb_rev = o["_rev"] if o.has_key?("_rev")
-      node.couchdb_id = o["_id"] if o.has_key?("_id")
-      node.index_id = node.couchdb_id
+
+      node.id = o["_id"] if o.has_key?("_id")
+      node.index_id = node.id
       node
     end
 
-    def self.cdb_list_by_environment(environment, inflate=false, couchdb=nil)
-      rs = (couchdb || Chef::CouchDB.new).get_view("nodes", "by_environment", :include_docs => inflate, :startkey => environment, :endkey => environment)
-      inflate ? rs["rows"].collect {|r| r["doc"]} : rs["rows"].collect {|r| r["value"]}
+    # Queries from the database the list of nodes that has the given environment.
+    #
+    # === Arguments
+    # environment - type of environment to look for.
+    # inflate - true gives entire document, while false gives a partial projection.
+    # db - database instance that can be used to perform the query.
+    #
+    # === Returns
+    # the cursor to the query
+    def self.cdb_list_by_environment(environment, inflate=false, db=nil)
+      db ||= DB
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :chef_environment => true, :name => true, :_id => false }
+        end
+
+      db.find({ :chef_environment => environment }, opt)
     end
 
     def self.list_by_environment(environment, inflate=false)
@@ -550,12 +566,23 @@ class Chef
       end
     end
 
-    # List all the Chef::Node objects in the CouchDB.  If inflate is set to true, you will get
+    # List all the Chef::Node objects in the DB.  If inflate is set to true, you will get
     # the full list of all Nodes, fully inflated.
-    def self.cdb_list(inflate=false, couchdb=nil)
-      rs =(couchdb || Chef::CouchDB.new).list("nodes", inflate)
-      lookup = (inflate ? "value" : "key")
-      rs["rows"].collect { |r| r[lookup] }
+    #
+    # === Returns
+    # The cursor to the result.
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= DB
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }
+        end
+
+      DB.list(inflate)
     end
 
     def self.list(inflate=false)
@@ -570,9 +597,9 @@ class Chef
       end
     end
 
-    # Load a node by name from CouchDB
+    # Load a node by name from DB
     def self.cdb_load(name, couchdb=nil)
-      (couchdb || Chef::CouchDB.new).load("node", name)
+      (db || DB).load(name)
     end
 
     def self.exists?(nodename, couchdb)
