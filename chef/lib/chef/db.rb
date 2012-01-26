@@ -1,16 +1,20 @@
 require 'chef/node'
+require 'chef/params_validate'
 require 'mongo'
 
 class Chef
   # Originally the CouchDB class. CouchDB databases directly map to one collection of a
-  # MongoDB database.
+  # MongoDB database. Instead of having a single monolithic database from the previous
+  # design, each "major views" are mapped to a single Mongo database. The "obj_type"
+  # parameter of the old methods are replaced by passing the db_name at the constructor.
+  # Data being sent to the Solr indexer is still the same as the original.
   #
   # TODO: decide how to handle conn error
   # TODO: Decide whether UUIDTools is **REALLY** needed or not since Mongo Ruby creates unique _id
   class DB
     include Chef::Mixin::ParamsValidate
 
-    extend forwardable
+    extend Forwardable
 
     # Note: find replaces CouchDB#get_view, CouchDB#list
     def_delegators :@coll, :find, :find_one
@@ -20,6 +24,8 @@ class Chef
     RETRY_DELAY = Chef::Config[:http_retry_delay]
 
     def initialize(url, db_name, opts = {})
+      @db_name = db_name
+
       url ||= Chef::Config[:couchdb_url]
       host, port = url.split(":")
       db_name ||= Chef::Config[:couchdb_database]
@@ -33,53 +39,13 @@ class Chef
       @db.name
     end
 
-    # Finds an object with the given chef_type and name from the database.
-    #
-    # === Returns
-    # Object or a Hash
-    #
-    # === Raises
-    # Chef::Exceptions::CouchDBNotFound if no match was found.
-    def find_by_name(chef_type, name)
-      result = @coll.find_one({ :chef_type => chef_type, :name => name })
-
-      if result.nil? then
-        raise Chef::Exceptions::CouchDBNotFound, "Cannot find #{chef_type} #{name} in DB!"
-      end
-
-      # TODO: Confirm this is correct
-      # Use from_json to deserialize special fields into the original object
-      Chef::JSONCompat.from_json(result)
-    end
-
-    def has_key?(obj_type, name)
-      validate(
-        {
-          :obj_type => obj_type,
-          :name => name,
-        },
-        {
-          :obj_type => { :kind_of => String },
-          :name => { :kind_of => String },
-        }
-      )
-
-      begin
-        find_by_name(obj_type, name)
-        true
-      rescue
-        false
-      end
-    end
-
     # Saves the object to db. Add to index if the object supports it.
     #
     # === Returns
     # The _id of the object
-    def store(chef_type, name, object)
+    def store(name, object)
       validate(
         {
-          :obj_type => chef_type,
           :name => name,
           :object => object,
         },
@@ -88,55 +54,103 @@ class Chef
         }
       )
 
-      query_selector = { :chef_type => chef_type, :name => name }
+      query_selector = { :name => name }
       @coll.update(query_selector, object, :upsert => true)
       id = @coll.find_one(query_selector)["_id"]
 
       if object.respond_to?(:add_to_index)
-        Chef::Log.info("Sending #{chef_type}(#{id}) to the index queue for addition.")
-        object.add_to_index(:database => database, :id => id, :type => chef_type)
+        Chef::Log.info("Sending #{@db_name}(#{id}) to the index queue for addition.")
+        object.add_to_index(:database => database, :id => id, :type => @db_name)
       end
 
       id
     end
 
-    def load(obj_type, name)
+    # Loads a document from the database
+    def load(name)
       validate(
         {
-          :obj_type => obj_type,
           :name => name,
         },
         {
-          :obj_type => { :kind_of => String },
           :name => { :kind_of => String },
         }
       )
 
-      doc = find_by_name(obj_type, name)
+      doc = find_by_name(name)
       # TODO: confirm correct transform of doc.couchdb = self if doc.respond_to?(:couchdb)
       doc.db = self if doc.respond_to?(:db)
       doc
     end
 
-    def delete(chef_type, name)
+    def delete(name)
       validate(
         {
-          :obj_type => chef_type,
           :name => name,
         },
         {
-          :obj_type => { :kind_of => String },
           :name => { :kind_of => String },
         }
       )
 
-      object = find_by_name(chef_type, name)
-      @coll.remove({ :chef_type => chef_type, :name => name })
+      object = find_by_name(name)
+      @coll.remove({ :name => name })
 
       if object.respond_to?(:delete_from_index)
-        Chef::Log.info("Sending #{chef_type}(#{id}) to the index queue for deletion..")
-        object.delete_from_index(:database => database, :id => object["_id"], :type => chef_type)
+        Chef::Log.info("Sending #{@db_name}(#{id}) to the index queue for deletion..")
+        object.delete_from_index(:database => database, :id => object["_id"], :type => @db_name)
       end
+    end
+
+    # Lists all entries from the database.
+    #
+    # TODO: Confirm that design documents for different all and all_id are consistent across the codebase!
+    #
+    # === Returns
+    # The cursor to the result
+    def list(inflate = false)
+      if inflate
+        @coll.find
+      else
+        @coll.find({}, { :fields => { :_id => false, :name => true }})
+      end
+    end
+
+    def has_key?(name)
+      validate(
+        {
+          :name => name,
+        },
+        {
+          :name => { :kind_of => String },
+        }
+      )
+
+      begin
+        find_by_name(name)
+        true
+      rescue
+        false
+      end
+    end
+
+    # Finds an object with the given name from the database.
+    #
+    # === Returns
+    # Object or a Hash
+    #
+    # === Raises
+    # Chef::Exceptions::CouchDBNotFound if no match was found.
+    def find_by_name(name)
+      result = @coll.find_one({ :name => name })
+
+      if result.nil? then
+        raise Chef::Exceptions::CouchDBNotFound, "Cannot find #{name} in DB!"
+      end
+
+      # TODO: Confirm this is correct
+      # Use from_json to deserialize special fields into the original object
+      Chef::JSONCompat.from_json(result)
     end
 
     # TODO: determine whether BSON::ObjectId() wrapping is needed
