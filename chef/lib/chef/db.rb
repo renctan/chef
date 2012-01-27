@@ -1,11 +1,12 @@
 require 'chef/node'
 require 'chef/params_validate'
 require 'mongo'
+require 'forwardable'
 
 class Chef
   # Originally the CouchDB class. CouchDB databases directly map to one collection of a
-  # MongoDB database. Instead of having a single monolithic database from the previous
-  # design, each "major views" are mapped to a single Mongo database. The "obj_type"
+  # MongoDB collection. Instead of having a single monolithic database from the previous
+  # design, each "major views" are mapped to a single Mongo collection. The "obj_type"
   # parameter of the old methods are replaced by passing the db_name at the constructor.
   # Data being sent to the Solr indexer is still the same as the original.
   #
@@ -19,18 +20,17 @@ class Chef
     # Note: find replaces CouchDB#get_view, CouchDB#list
     def_delegators :@coll, :find, :find_one
 
-    COLLECTION_NAME = "config"
     MAX_RETRY_ATTEMPTS = Chef::Config[:http_retry_count]
     RETRY_DELAY = Chef::Config[:http_retry_delay]
 
-    def initialize(url, db_name, opts = {})
+    def initialize(url, collection_name, opts = {})
       @db_name = db_name
 
       url ||= Chef::Config[:couchdb_url]
       host, port = url.split(":")
-      db_name ||= Chef::Config[:couchdb_database]
-      @db = Mongo::DB.new(db_name, Mongo::Connection.new(host, port), opts)
-      @coll = @db[COLLECTION_NAME]
+      @db = Mongo::DB.new(Chef::Config[:couchdb_database],
+                          Mongo::Connection.new(host, port), opts)
+      @coll = @db[collection_name]
     end
 
     # TODO: Should return namespace (ie, dbname + collname) instead?
@@ -43,7 +43,9 @@ class Chef
     #
     # === Returns
     # The _id of the object
-    def store(name, object)
+    def store(object)
+      name = object["name"]
+
       query_selector = { :name => name }
       @coll.update(query_selector, object, :upsert => true)
       id = @coll.find_one(query_selector)["_id"]
