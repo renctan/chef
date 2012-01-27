@@ -21,7 +21,7 @@
 require 'chef/config'
 require 'chef/mixin/params_validate'
 require 'chef/mixin/from_file'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/run_list'
 require 'chef/index_queue'
 require 'chef/mash'
@@ -35,48 +35,24 @@ class Chef
     include Chef::Mixin::ParamsValidate
     include Chef::IndexQueue::Indexable
 
-    DESIGN_DOCUMENT = {
-      "version" => 6,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "role") {
-              emit(doc.name, doc);
-            }
-          }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "role") {
-              emit(doc.name, doc.name);
-            }
-          }
-          EOJS
-        }
-      }
-    }
+    attr_accessor :db
+    attr_reader :id
 
-    attr_accessor :couchdb_rev, :couchdb
-    attr_reader :couchdb_id
+    DB = Chef::DB.new(nil, "role")
 
     # Create a new Chef::Role object.
-    def initialize(couchdb=nil)
+    def initialize(db=nil)
       @name = ''
       @description = ''
       @default_attributes = Mash.new
       @override_attributes = Mash.new
       @env_run_lists = {"_default" => Chef::RunList.new}
-      @couchdb_rev = nil
-      @couchdb_id = nil
-      @couchdb = couchdb || Chef::CouchDB.new
+      @id = nil
+      @db = db || DB
     end
 
-    def couchdb_id=(value)
-      @couchdb_id = value
+    def id=(value)
+      @id = value
       self.index_id = value
     end
 
@@ -159,25 +135,28 @@ class Chef
     end
 
     def to_hash
+      h = to_json_obj
+      h["chef_type"] = "role"
+    end
+
+    def to_json_obj
       env_run_lists_without_default = @env_run_lists.dup
       env_run_lists_without_default.delete("_default")
-      result = {
+      
+      {
         "name" => @name,
         "description" => @description,
         'json_class' => self.class.name,
         "default_attributes" => @default_attributes,
         "override_attributes" => @override_attributes,
-        "chef_type" => "role",
         "run_list" => run_list,
         "env_run_lists" => env_run_lists_without_default
       }
-      result["_rev"] = couchdb_rev if couchdb_rev
-      result
     end
 
     # Serialize this object as a hash
     def to_json(*a)
-      to_hash.to_json(*a)
+      to_json_obj.to_json(*a)
     end
 
     def update_from!(o)
@@ -208,18 +187,26 @@ class Chef
       end
       role.env_run_lists(env_run_list_hash)
 
-      role.couchdb_rev = o["_rev"] if o.has_key?("_rev")
-      role.index_id = role.couchdb_id
-      role.couchdb_id = o["_id"] if o.has_key?("_id")
+      role.id = o["_id"] if o.has_key?("_id")
+      role.index_id = role.id
+
       role
     end
 
-    # List all the Chef::Role objects in the CouchDB.  If inflate is set to true, you will get
+    # List all the Chef::Role objects in the DB.  If inflate is set to true, you will get
     # the full list of all Roles, fully inflated.
-    def self.cdb_list(inflate=false, couchdb=nil)
-      rs = (couchdb || Chef::CouchDB.new).list("roles", inflate)
-      lookup = (inflate ? "value" : "key")
-      rs["rows"].collect { |r| r[lookup] }
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= DB
+      
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
+      DB.list(opt)
     end
 
     # Get the list of all roles from the API.
@@ -235,9 +222,9 @@ class Chef
       end
     end
 
-    # Load a role by name from CouchDB
-    def self.cdb_load(name, couchdb=nil)
-      (couchdb || Chef::CouchDB.new).load("role", name)
+    # Load a role by name from DB
+    def self.cdb_load(name, db=nil)
+      (db || DB).load(name)
     end
 
     # Load a role by name from the API
@@ -245,9 +232,9 @@ class Chef
       chef_server_rest.get_rest("roles/#{name}")
     end
 
-    def self.exists?(rolename, couchdb)
+    def self.exists?(rolename, db)
       begin
-        self.cdb_load(rolename, couchdb)
+        self.cdb_load(rolename, db)
       rescue Chef::Exceptions::CouchDBNotFound
         nil
       end
@@ -261,9 +248,9 @@ class Chef
       chef_server_rest.get_rest("roles/#{@name}/environments")
     end
 
-    # Remove this role from the CouchDB
+    # Remove this role from the DB
     def cdb_destroy
-      couchdb.delete("role", @name, couchdb_rev)
+      db.delete(@name)
     end
 
     # Remove this role via the REST API
@@ -271,9 +258,9 @@ class Chef
       chef_server_rest.delete_rest("roles/#{@name}")
     end
 
-    # Save this role to the CouchDB
+    # Save this role to the DB
     def cdb_save
-      self.couchdb_rev = couchdb.store("role", @name, self)["rev"]
+      db.store(to_json_obj)
     end
 
     # Save this role via the REST API
@@ -291,11 +278,6 @@ class Chef
     def create
       chef_server_rest.post_rest("roles", self)
       self
-    end
-
-    # Set up our CouchDB design document
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("roles", DESIGN_DOCUMENT)
     end
 
     # As a string
@@ -322,19 +304,20 @@ class Chef
       end
     end
 
-    # Sync all the json roles with couchdb from disk
-    def self.sync_from_disk_to_couchdb
+    # Sync all the json roles with db from disk
+    # Note: Dead code?
+    def self.sync_from_disk_to_db
       Dir[File.join(Chef::Config[:role_path], "*.json")].each do |role_file|
         short_name = File.basename(role_file, ".json")
         Chef::Log.warn("Loading #{short_name}")
         r = Chef::Role.from_disk(short_name, "json")
+
         begin
-          couch_role = Chef::Role.cdb_load(short_name)
-          r.couchdb_rev = couch_role.couchdb_rev
           Chef::Log.debug("Replacing role #{short_name} with data from #{role_file}")
         rescue Chef::Exceptions::CouchDBNotFound
           Chef::Log.debug("Creating role #{short_name} with data from #{role_file}")
         end
+
         r.cdb_save
       end
     end

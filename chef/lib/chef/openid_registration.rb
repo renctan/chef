@@ -18,7 +18,7 @@
 
 require 'chef/config'
 require 'chef/mixin/params_validate'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/index_queue'
 require 'digest/sha1'
 require 'chef/json_compat'
@@ -26,58 +26,13 @@ require 'chef/json_compat'
 class Chef
   class OpenIDRegistration
     
-    attr_accessor :name, :salt, :validated, :password, :couchdb_rev, :admin
+    attr_accessor :name, :salt, :validated, :password, :admin
     
     include Chef::Mixin::ParamsValidate
     include Chef::IndexQueue::Indexable
     
-    DESIGN_DOCUMENT = {
-      "version" => 3,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-            function(doc) {
-              if (doc.chef_type == "openid_registration") {
-                emit(doc.name, doc);
-              }
-            }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "openid_registration") {
-              emit(doc.name, doc.name);
-            }
-          }
-          EOJS
-        },
-        "validated" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "openid_registration") {
-              if (doc.validated == true) {
-                emit(doc.name, doc);
-              }
-            }
-          }
-          EOJS
-        },
-        "unvalidated" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "openid_registration") {
-              if (doc.validated == false) {
-                emit(doc.name, doc);
-              }
-            }
-          }
-          EOJS
-        },
-      },
-    }
-    
+    DB = Chef::DB.new(nil, "openid_registration")
+
     # Create a new Chef::OpenIDRegistration object.
     def initialize()
       @name = nil
@@ -85,8 +40,7 @@ class Chef
       @password = nil
       @validated = false
       @admin = false
-      @couchdb_rev = nil
-      @couchdb = Chef::CouchDB.new
+      @db = DB
     end
     
     def name=(n)
@@ -99,21 +53,20 @@ class Chef
       @password = encrypt_password(@salt, password)      
     end
     
-    # Serialize this object as a hash 
-    def to_json(*a)
-      attributes = Hash.new
-      recipes = Array.new
-      result = {
+    def to_json_obj
+      {
         'name' => @name,
         'json_class' => self.class.name,
         'salt' => @salt,
         'password' => @password,
         'validated' => @validated,
         'admin' => @admin,
-        'chef_type' => 'openid_registration',
       }
-      result["_rev"] = @couchdb_rev if @couchdb_rev
-      result.to_json(*a)
+    end
+
+    # Serialize this object as a hash 
+    def to_json(*a)
+      to_json_obj.to_json(*a)
     end
     
     # Create a Chef::Node from JSON
@@ -124,50 +77,46 @@ class Chef
       me.password = o["password"]
       me.validated = o["validated"]
       me.admin = o["admin"]
-      me.couchdb_rev = o["_rev"] if o.has_key?("_rev")
+
       me
     end
     
-    # List all the Chef::OpenIDRegistration objects in the CouchDB.  If inflate is set to true, you will get
+    # List all the Chef::OpenIDRegistration objects in the DB.  If inflate is set to true, you will get
     # the full list of all registration objects.  Otherwise, you'll just get the IDs
     def self.list(inflate=false)
-      rs = Chef::CouchDB.new.list("registrations", inflate)
-      if inflate
-        rs["rows"].collect { |r| r["value"] }
-      else
-        rs["rows"].collect { |r| r["key"] }
-      end
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
+      DB.list(opt)
     end
     
     def self.cdb_list(*args)
       list(*args)
     end
     
-    # Load an OpenIDRegistration by name from CouchDB
+    # Load an OpenIDRegistration by name from DB
     def self.load(name)
-      Chef::CouchDB.new.load("openid_registration", name)
+      DB.load(name)
     end
     
     # Whether or not there is an OpenID Registration with this key.
     def self.has_key?(name)
-      Chef::CouchDB.new.has_key?("openid_registration", name)
+      DB.has_key?(name)
     end
     
-    # Remove this OpenIDRegistration from the CouchDB
+    # Remove this OpenIDRegistration from the DB
     def destroy
-      @couchdb.delete("openid_registration", @name, @couchdb_rev)
+      @db.delete(@name)
     end
     
-    # Save this OpenIDRegistration to the CouchDB
+    # Save this OpenIDRegistration to the DB
     def save
-      results = @couchdb.store("openid_registration", @name, self)
-      @couchdb_rev = results["rev"]
-    end
-    
-    # Set up our CouchDB design document
-    def self.create_design_document(couchdb=nil)
-      couchdb ||= Chef::CouchDB.new
-      couchdb.create_design_document("registrations", DESIGN_DOCUMENT)
+      @db.store(to_json_obj)
     end
     
     protected

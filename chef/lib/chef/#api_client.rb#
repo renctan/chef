@@ -214,7 +214,7 @@ class Chef
 
     # Save this client to the DB
     def cdb_save
-      @db.store(to_json_obj)
+      @db.store(@name, to_json_obj)
     end
 
     # Save this client via the REST API, returns a hash including the private key

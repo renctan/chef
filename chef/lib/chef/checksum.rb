@@ -25,7 +25,7 @@ class Chef
   # to track which files the system already manages.
   class Checksum
     attr_accessor :checksum, :create_time
-    attr_accessor :couchdb_id, :couchdb_rev
+    attr_accessor :id
 
     attr_reader :storage
 
@@ -35,59 +35,42 @@ class Chef
     # to the pre-commit state.
     attr_reader :original_committed_file_location
 
-    DESIGN_DOCUMENT = {
-      "version" => 1,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) { 
-            if (doc.chef_type == "checksum") {
-              emit(doc.checksum, doc);
-            }
-          }
-          EOJS
-        },
-      }
-    }
+    DB = Chef::DB.new(nil, "checksum")
     
     # Creates a new Chef::Checksum object.
     # === Arguments
     # checksum::: the MD5 content hash of the file
-    # couchdb::: An instance of Chef::CouchDB
     #
     # === Returns
     # object<Chef::Checksum>:: Duh. :)
-    def initialize(checksum=nil, couchdb=nil)
+    def initialize(checksum=nil)
       @create_time = Time.now.iso8601
       @checksum = checksum
       @original_committed_file_location = nil
       @storage = Storage::Filesystem.new(Chef::Config.checksum_path, checksum)
     end
-    
-    def to_json(*a)
-      result = {
+
+    def to_json_obj
+      {
         :checksum => checksum,
         :create_time => create_time,
         :json_class => self.class.name,
-        :chef_type => 'checksum',
 
         # For Chef::CouchDB (id_to_name, name_to_id)
         :name => checksum
       }
-      result.to_json(*a)
+    end
+    
+    def to_json(*a)
+      to_json_obj.to_json(*a)
     end
 
     def self.json_create(o)
       checksum = new(o['checksum'])
       checksum.create_time = o['create_time']
 
-      if o.has_key?('_rev')
-        checksum.couchdb_rev = o["_rev"]
-        o.delete("_rev")
-      end
       if o.has_key?("_id")
-        checksum.couchdb_id = o["_id"]
+        checksum.id = o["_id"]
         o.delete("_id")
       end
       checksum
@@ -125,35 +108,42 @@ class Chef
     end
 
     ##
-    # Couchdb
+    # DB
     ##
 
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("checksums", DESIGN_DOCUMENT)
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= DB
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :checksum => true, :_id => false }}
+        end
+
+      db.list(opt)
     end
     
-    def self.cdb_list(inflate=false, couchdb=nil)
-      rs = (couchdb || Chef::CouchDB.new).list("checksums", inflate)
-      lookup = (inflate ? "value" : "key")
-      rs["rows"].collect { |r| r[lookup] }        
-    end
-    
-    def self.cdb_all_checksums(couchdb = nil)
-      rs = (couchdb || Chef::CouchDB.new).list("checksums", true)
-      rs["rows"].inject({}) { |hash_result, r| hash_result[r['key']] = 1; hash_result }
+    def self.cdb_all_checksums(db = nil)
+      cursor = (db || DB).list({})
+
+      hash_result = {}
+      cursor.each do |doc|
+        hash_result[doc["key"]] = 1
+      end
     end
 
-    def self.cdb_load(checksum, couchdb=nil)
-      # Probably want to look for a view here at some point
-      (couchdb || Chef::CouchDB.new).load("checksum", checksum)
+    def self.cdb_load(checksum, db=nil)
+      (db || DB).load(checksum)
     end
 
-    def cdb_destroy(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).delete("checksum", checksum, @couchdb_rev)
+    def cdb_destroy(db=nil)
+      (db || DB).delete(checksum)
     end
 
-    def cdb_save(couchdb=nil)
-      @couchdb_rev = (couchdb || Chef::CouchDB.new).store("checksum", checksum, self)["rev"]
+    def cdb_save(db=nil)
+      (db || Chef::DB.new).store(to_json_obj)
     end
 
 

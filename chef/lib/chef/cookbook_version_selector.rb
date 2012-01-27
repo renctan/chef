@@ -152,13 +152,13 @@ class Chef
     #
     # Returns:
     #   Hash of: name to CookbookVersion
-    def self.expand_to_cookbook_versions(run_list, environment, couchdb=nil)
+    def self.expand_to_cookbook_versions(run_list, environment, db=nil)
       # expand any roles in this run_list.
-      expanded_run_list = run_list.expand(environment, 'couchdb', :couchdb => couchdb).recipes.with_version_constraints
+      expanded_run_list = run_list.expand(environment, 'db', :db => db).recipes.with_version_constraints
 
-      cookbooks_for_environment = Chef::Environment.cdb_minimal_filtered_versions(environment, couchdb)
+      cookbooks_for_environment = Chef::Environment.cdb_minimal_filtered_versions(environment, db)
       cookbook_collection = constrain(cookbooks_for_environment, expanded_run_list)
-      full_cookbooks = Chef::MinimalCookbookVersion.load_full_versions_of(cookbook_collection.values, couchdb)
+      full_cookbooks = Chef::MinimalCookbookVersion.load_full_versions_of(cookbook_collection.values, db)
       full_cookbooks.inject({}) do |cb_map, cookbook_version|
         cb_map[cookbook_version.name] = cookbook_version
         cb_map

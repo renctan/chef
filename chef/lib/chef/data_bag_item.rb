@@ -23,7 +23,7 @@ require 'forwardable'
 require 'chef/config'
 require 'chef/mixin/params_validate'
 require 'chef/mixin/from_file'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/index_queue'
 require 'chef/data_bag'
 require 'chef/mash'
@@ -39,31 +39,7 @@ class Chef
     include Chef::IndexQueue::Indexable
 
     VALID_ID = /^[\-[:alnum:]_]+$/
-
-    DESIGN_DOCUMENT = {
-      "version" => 1,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "data_bag_item") {
-              emit(doc.name, doc);
-            }
-          }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "data_bag_item") {
-              emit(doc.name, doc.name);
-            }
-          }
-          EOJS
-        }
-      }
-    }
+    DB = Chef::Db.new(nil, "data_bag_item")
 
     def self.validate_id!(id_str)
       if id_str.nil? || ( id_str !~ VALID_ID )
@@ -74,16 +50,15 @@ class Chef
     # Define all Hash's instance methods as delegating to @raw_data
     def_delegators(:@raw_data, *(Hash.instance_methods - Object.instance_methods))
 
-    attr_accessor :couchdb_rev, :couchdb_id, :couchdb
+    attr_accessor :id, :db
     attr_reader :raw_data
 
     # Create a new Chef::DataBagItem
-    def initialize(couchdb=nil)
-      @couchdb_rev = nil
-      @couchdb_id = nil
+    def initialize(db=nil)
+      @id = nil
       @data_bag = nil
       @raw_data = Mash.new
-      @couchdb = couchdb || Chef::CouchDB.new
+      @db = db || DB
     end
 
     def chef_server_rest
@@ -138,21 +113,21 @@ class Chef
       result = self.raw_data
       result["chef_type"] = "data_bag_item"
       result["data_bag"] = self.data_bag
-      result["_rev"] = @couchdb_rev if @couchdb_rev
       result
+    end
+
+    def to_json_obj
+      {
+        "name" => self.object_name,
+        "json_class" => self.class.name,
+        "data_bag" => self.data_bag,
+        "raw_data" => self.raw_data
+      }
     end
 
     # Serialize this object as a hash
     def to_json(*a)
-      result = {
-        "name" => self.object_name,
-        "json_class" => self.class.name,
-        "chef_type" => "data_bag_item",
-        "data_bag" => self.data_bag,
-        "raw_data" => self.raw_data
-      }
-      result["_rev"] = @couchdb_rev if @couchdb_rev
-      result.to_json(*a)
+      to_json_obj.to_json(*a)
     end
 
     def self.from_hash(h)
@@ -166,25 +141,22 @@ class Chef
       bag_item = new
       bag_item.data_bag(o["data_bag"])
       o.delete("data_bag")
-      o.delete("chef_type")
       o.delete("json_class")
       o.delete("name")
-      if o.has_key?("_rev")
-        bag_item.couchdb_rev = o["_rev"]
-        o.delete("_rev")
-      end
+
       if o.has_key?("_id")
-        bag_item.couchdb_id = o["_id"]
-        bag_item.index_id = bag_item.couchdb_id
+        bag_item.id = o["_id"]
+        bag_item.index_id = bag_item.id
         o.delete("_id")
       end
+
       bag_item.raw_data = Mash.new(o["raw_data"])
       bag_item
     end
 
-    # Load a Data Bag Item by name from CouchDB
-    def self.cdb_load(data_bag, name, couchdb=nil)
-      (couchdb || Chef::CouchDB.new).load("data_bag_item", object_name(data_bag, name))
+    # Load a Data Bag Item by name from DB
+    def self.cdb_load(data_bag, name, db=nil)
+      (db || DB).load(object_name(data_bag, name))
     end
 
     # Load a Data Bag Item by name via either the RESTful API or local data_bag_path if run in solo mode
@@ -205,19 +177,19 @@ class Chef
       end
     end
 
-    # Remove this Data Bag Item from CouchDB
+    # Remove this Data Bag Item from DB
     def cdb_destroy
       Chef::Log.debug "Destroying data bag item: #{self.inspect}"
-      @couchdb.delete("data_bag_item", object_name, @couchdb_rev)
+      @db.delete(object_name)
     end
 
     def destroy(data_bag=data_bag, databag_item=name)
       chef_server_rest.delete_rest("data/#{data_bag}/#{databag_item}")
     end
 
-    # Save this Data Bag Item to CouchDB
+    # Save this Data Bag Item to DB
     def cdb_save
-      @couchdb_rev = @couchdb.store("data_bag_item", object_name, self)["rev"]
+      @db.store(to_json_obj)
     end
 
     # Save this Data Bag Item via RESTful API
@@ -236,11 +208,6 @@ class Chef
     def create
       chef_server_rest.post_rest("data/#{data_bag}", self)
       self
-    end
-
-    # Set up our CouchDB design document
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("data_bag_items", DESIGN_DOCUMENT)
     end
 
     def ==(other)

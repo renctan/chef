@@ -6,8 +6,9 @@ require 'forwardable'
 class Chef
   # Originally the CouchDB class. CouchDB databases directly map to one collection of a
   # MongoDB collection. Instead of having a single monolithic database from the previous
-  # design, each "major views" are mapped to a single Mongo collection. The "obj_type"
-  # parameter of the old methods are replaced by passing the db_name at the constructor.
+  # design, each chef_type are mapped to a single Mongo collection. The "obj_type"
+  # parameter of the old methods are replaced by passing the collection_name at the constructor.
+  #
   # Data being sent to the Solr indexer is still the same as the original.
   #
   # TODO: decide how to handle conn error
@@ -26,9 +27,9 @@ class Chef
     def initialize(url, collection_name, opts = {})
       @db_name = db_name
 
-      url ||= Chef::Config[:couchdb_url]
+      url ||= Chef::Config[:db_url]
       host, port = url.split(":")
-      @db = Mongo::DB.new(Chef::Config[:couchdb_database],
+      @db = Mongo::DB.new(Chef::Config[:database],
                           Mongo::Connection.new(host, port), opts)
       @coll = @db[collection_name]
     end

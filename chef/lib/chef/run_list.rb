@@ -154,8 +154,8 @@ class Chef
         RunListExpansionFromDisk.new(environment, @run_list_items)
       when 'server'
         RunListExpansionFromAPI.new(environment, @run_list_items, opts[:rest])
-      when 'couchdb'
-        RunListExpansionFromCouchDB.new(environment, @run_list_items, opts[:couchdb])
+      when 'db'
+        RunListExpansionFromDB.new(environment, @run_list_items, opts[:db])
       end
     end
 

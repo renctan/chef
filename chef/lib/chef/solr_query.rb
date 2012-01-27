@@ -21,7 +21,7 @@
 require 'chef/mixin/xml_escape'
 require 'chef/log'
 require 'chef/config'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/solr_query/solr_http_request'
 require 'chef/solr_query/query_transform'
 
@@ -41,28 +41,28 @@ class Chef
     attr_accessor :params
 
     # Create a new Query object - takes the solr_url and optional
-    # Chef::CouchDB object to inflate objects into.
-    def initialize(couchdb = nil)
+    # Chef::DB object to inflate objects into.
+    #
+    # Note: db is only being used to get the database name & do bulk_get in the objects method
+    #  which is not being used anywhere in the codebase.
+    def initialize(db = nil)
       @filter_query = {}
       @params = {}
 
-      if couchdb.nil?
-        @database = Chef::Config[:couchdb_database]
-        @couchdb = Chef::CouchDB.new(nil, Chef::Config[:couchdb_database])
+      if db.nil?
+        @database = Chef::Config[:database]
       else
-        unless couchdb.respond_to?(:couchdb_database)
-          Chef::Log.warn("Passing the database name to Chef::Solr::Query initialization is deprecated. Please pass in the Chef::CouchDB object instead.")
-          @database = couchdb
-          @couchdb = Chef::CouchDB.new(nil, couchdb)
+        unless db.respond_to?(:database)
+          Chef::Log.warn("Passing the database name to Chef::Solr::Query initialization is deprecated. Please pass in the Chef::DB object instead.")
+          @database = db
         else
-          @database = couchdb.couchdb_database
-          @couchdb = couchdb
+          @database = db.database
         end
       end
     end
 
-    def self.from_params(params, couchdb=nil)
-      query = new(couchdb)
+    def self.from_params(params, db=nil)
+      query = new(db)
       query.params = VALID_PARAMS.inject({}) do |p, param_name|
         p[param_name] = params[param_name] if params.key?(param_name)
         p
@@ -101,9 +101,14 @@ class Chef
       @query = Chef::SolrQuery::QueryTransform.transform(original_query)
     end
 
+    # Note: Note being used anywhere can be a potential problem if we need to search
+    #  by _id across multiple collections because it can result to unnecessary network
+    #  roundtrips
     def objects
       if !object_ids.empty?
-        @bulk_objects ||= @couchdb.bulk_get(object_ids)
+        # TODO: Remove method? This breaks in Mongo implementation if left as is,
+        #  but is not being used anywhere.
+        @bulk_objects ||= @db.bulk_get(object_ids)
         Chef::Log.debug { "Bulk get of objects: #{@bulk_objects.inspect}" }
         @bulk_objects
       else
@@ -148,7 +153,7 @@ class Chef
       commit
     end
 
-    def rebuild_index(db=Chef::Config[:couchdb_database])
+    def rebuild_index(db=Chef::Config[:database])
       delete_database(db)
 
       results = {}
@@ -170,7 +175,7 @@ class Chef
       rescue Net::HTTPServerException => e
         # 404s are okay, there might not be any of that kind of object...
         if e.message =~ /Not Found/
-          Chef::Log.warn("Could not load #{klass.name} objects from couch for re-indexing (this is ok if you don't have any of these)")
+          Chef::Log.warn("Could not load #{klass.name} objects from database for re-indexing (this is ok if you don't have any of these)")
           return false
         else
           raise e

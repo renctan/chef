@@ -140,9 +140,9 @@ class Chef
     checksum_path "/var/chef/checksums"
 
     # CouchDB database name to use
-    couchdb_database "chef"
+    database "chef"
 
-    couchdb_url "http://localhost:5984"
+    db_url "http://localhost:27017"
 
     # Where chef's cache files should be stored
     file_cache_path platform_specific_path("/var/chef/cache")

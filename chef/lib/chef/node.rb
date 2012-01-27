@@ -60,99 +60,6 @@ class Chef
     include Chef::Mixin::LanguageIncludeAttribute
     include Chef::IndexQueue::Indexable
 
-    DESIGN_DOCUMENT = {
-      "version" => 11,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "node") {
-              emit(doc.name, doc);
-            }
-          }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "node") {
-              emit(doc.name, doc.name);
-            }
-          }
-          EOJS
-        },
-        "status" => {
-          "map" => <<-EOJS
-            function(doc) {
-              if (doc.chef_type == "node") {
-                var to_emit = { "name": doc.name, "chef_environment": doc.chef_environment };
-                if (doc["attributes"]["fqdn"]) {
-                  to_emit["fqdn"] = doc["attributes"]["fqdn"];
-                } else {
-                  to_emit["fqdn"] = "Undefined";
-                }
-                if (doc["attributes"]["ipaddress"]) {
-                  to_emit["ipaddress"] = doc["attributes"]["ipaddress"];
-                } else {
-                  to_emit["ipaddress"] = "Undefined";
-                }
-                if (doc["attributes"]["ohai_time"]) {
-                  to_emit["ohai_time"] = doc["attributes"]["ohai_time"];
-                } else {
-                  to_emit["ohai_time"] = "Undefined";
-                }
-                if (doc["attributes"]["uptime"]) {
-                  to_emit["uptime"] = doc["attributes"]["uptime"];
-                } else {
-                  to_emit["uptime"] = "Undefined";
-                }
-                if (doc["attributes"]["platform"]) {
-                  to_emit["platform"] = doc["attributes"]["platform"];
-                } else {
-                  to_emit["platform"] = "Undefined";
-                }
-                if (doc["attributes"]["platform_version"]) {
-                  to_emit["platform_version"] = doc["attributes"]["platform_version"];
-                } else {
-                  to_emit["platform_version"] = "Undefined";
-                }
-                if (doc["run_list"]) {
-                  to_emit["run_list"] = doc["run_list"];
-                } else {
-                  to_emit["run_list"] = "Undefined";
-                }
-                emit(doc.name, to_emit);
-              }
-            }
-          EOJS
-        },
-        "by_run_list" => {
-          "map" => <<-EOJS
-            function(doc) {
-              if (doc.chef_type == "node") {
-                if (doc['run_list']) {
-                  for (var i=0; i < doc.run_list.length; i++) {
-                    emit(doc['run_list'][i], doc.name);
-                  }
-                }
-              }
-            }
-          EOJS
-        },
-        "by_environment" => {
-          "map" => <<-EOJS
-            function(doc) {
-              if (doc.chef_type == "node") {
-                var env = (doc['chef_environment'] == null ? "_default" : doc['chef_environment']);
-                emit(env, doc.name);
-              }
-            }
-          EOJS
-        }
-      },
-    }
-
     DB = Chef::DB.new(nil, "node")
 
     # Create a new Chef::Node object.
@@ -548,14 +455,7 @@ class Chef
     def self.cdb_list_by_environment(environment, inflate=false, db=nil)
       db ||= DB
 
-      # TODO: confirm if not showing _id is really the desired behavior
-      opt = 
-        if inflate then
-          {}
-        else
-          { :fields => { :chef_environment => true, :name => true, :_id => false }
-        end
-
+      # Note: all docs created by this class have the chef_environment field
       db.find({ :chef_environment => environment }, opt)
     end
 
@@ -582,10 +482,10 @@ class Chef
         if inflate then
           {}
         else
-          { :fields => { :name => true, :_id => false }
+          { :fields => { :name => true, :_id => false }}
         end
 
-      DB.list(opt)
+      db.list(opt)
     end
 
     def self.list(inflate=false)
@@ -645,7 +545,7 @@ class Chef
 
     # Save this node to the DB
     def cdb_save
-      db.store(name, to_json_obj)
+      db.store(to_json_obj)
     end
 
     # Save this node via the REST API

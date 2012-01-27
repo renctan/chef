@@ -21,7 +21,7 @@
 require 'chef/config'
 require 'chef/mixin/params_validate'
 require 'chef/mixin/from_file'
-require 'chef/couchdb'
+require 'chef/db'
 require 'chef/data_bag_item'
 require 'chef/index_queue'
 require 'chef/mash'
@@ -36,39 +36,7 @@ class Chef
 
     VALID_NAME = /^[\-[:alnum:]_]+$/
 
-    DESIGN_DOCUMENT = {
-      "version" => 2,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "data_bag") {
-              emit(doc.name, doc);
-            }
-          }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "data_bag") {
-              emit(doc.name, doc.name);
-            }
-          }
-          EOJS
-        },
-        "entries" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "data_bag_item") {
-              emit(doc.data_bag, doc.raw_data.id);
-            }
-          }
-          EOJS
-        }
-      }
-    }
+    DB = Chef::DB.new(nil, "data_bag")
 
     def self.validate_name!(name)
       unless name =~ VALID_NAME
@@ -76,14 +44,13 @@ class Chef
       end
     end
 
-    attr_accessor :couchdb_rev, :couchdb_id, :couchdb
+    attr_accessor :id, :db
 
     # Create a new Chef::DataBag
-    def initialize(couchdb=nil)
+    def initialize(db=nil)
       @name = ''
-      @couchdb_rev = nil
-      @couchdb_id = nil
-      @couchdb = (couchdb || Chef::CouchDB.new)
+      @id = nil
+      @db = (db || DB)
     end
 
     def name(arg=nil)
@@ -95,13 +62,16 @@ class Chef
     end
 
     def to_hash
-      result = {
+      result = to_json_obj
+      result["chef_type"] = "data_bag"
+      result
+    end
+
+    def to_json_obj
+      {
         "name" => @name,
         'json_class' => self.class.name,
-        "chef_type" => "data_bag",
       }
-      result["_rev"] = @couchdb_rev if @couchdb_rev
-      result
     end
 
     # Serialize this object as a hash
@@ -121,22 +91,30 @@ class Chef
     def self.json_create(o)
       bag = new
       bag.name(o["name"])
-      bag.couchdb_rev = o["_rev"] if o.has_key?("_rev")
-      bag.couchdb_id = o["_id"] if o.has_key?("_id")
-      bag.index_id = bag.couchdb_id
+      bag.id = o["_id"] if o.has_key?("_id")
+      bag.index_id = bag.id
       bag
     end
 
-    # List all the Chef::DataBag objects in the CouchDB.  If inflate is set to true, you will get
+    # List all the Chef::DataBag objects in the DB.  If inflate is set to true, you will get
     # the full list of all Roles, fully inflated.
-    def self.cdb_list(inflate=false, couchdb=nil)
-      rs = (couchdb || Chef::CouchDB.new).list("data_bags", inflate)
-      lookup = (inflate ? "value" : "key")
-      rs["rows"].collect { |r| r[lookup] }
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= DB
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
+      db.list(opt)
     end
 
     def self.list(inflate=false)
       if inflate
+        # TODO: Check why this is needed -> docs are not embedded, but scattered?
         # Can't search for all data bags like other objects, fall back to N+1 :(
         list(false).inject({}) do |response, bag_and_uri|
           response[bag_and_uri.first] = load(bag_and_uri.first)
@@ -147,9 +125,9 @@ class Chef
       end
     end
 
-    # Load a Data Bag by name from CouchDB
-    def self.cdb_load(name, couchdb=nil)
-      (couchdb || Chef::CouchDB.new).load("data_bag", name)
+    # Load a Data Bag by name from DB
+    def self.cdb_load(name, db=nil)
+      (db || DB).load(name)
     end
 
     # Load a Data Bag by name via either the RESTful API or local data_bag_path if run in solo mode
@@ -169,25 +147,24 @@ class Chef
       end
     end
 
-    # Remove this Data Bag from CouchDB
+    # Remove this Data Bag from DB
     def cdb_destroy
-      removed = @couchdb.delete("data_bag", @name, @couchdb_rev)
-      rs = @couchdb.get_view("data_bags", "entries", :include_docs => true, :startkey => @name, :endkey => @name)
-      rs["rows"].each do |row|
-        row["doc"].couchdb = couchdb
-        row["doc"].cdb_destroy
-      end
-      removed
+      @db.delete(@name)
+      
+      # TODO: check why there can be multiple results, and why it needs to be deleted recursively
+#      rs["rows"].each do |row|
+#        row["doc"].couchdb = couchdb
+#        row["doc"].cdb_destroy
+#      end
     end
 
     def destroy
       chef_server_rest.delete_rest("data/#{@name}")
     end
 
-    # Save this Data Bag to the CouchDB
+    # Save this Data Bag to the DB
     def cdb_save
-      results = @couchdb.store("data_bag", @name, self)
-      @couchdb_rev = results["rev"]
+      @db.store(to_json_obj)
     end
 
     # Save the Data Bag via RESTful API
@@ -207,22 +184,18 @@ class Chef
       self
     end
 
-    # List all the items in this Bag from CouchDB
+    # List all the items in this Bag from DB
     # The self.load method does this through the REST API
     def list(inflate=false)
-      rs = nil
-      if inflate
-        rs = @couchdb.get_view("data_bags", "entries", :include_docs => true, :startkey => @name, :endkey => @name)
-        rs["rows"].collect { |r| r["doc"] }
-      else
-        rs = @couchdb.get_view("data_bags", "entries", :startkey => @name, :endkey => @name)
-        rs["rows"].collect { |r| r["value"] }
-      end
-    end
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }
+        end
 
-    # Set up our CouchDB design document
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("data_bags", DESIGN_DOCUMENT)
+      DB.list(opt)
     end
 
     # As a string
