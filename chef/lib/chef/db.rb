@@ -1,5 +1,8 @@
-require 'chef/node'
-require 'chef/params_validate'
+require 'chef/mixin/params_validate'
+require 'chef/config'
+require 'chef/rest'
+require 'chef/json_compat'
+require 'chef/log'
 require 'mongo'
 require 'forwardable'
 
