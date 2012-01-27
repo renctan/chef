@@ -45,7 +45,7 @@ class Chef
 
     def_delegators :construct_attributes, :keys, :each_key, :each_value, :key?, :has_key?
 
-    attr_accessor :recipe_list, :couchdb, :couchdb_rev, :run_state, :run_list
+    attr_accessor :recipe_list, :db, :run_state, :run_list
     attr_accessor :override_attrs, :default_attrs, :normal_attrs, :automatic_attrs
     attr_reader :id
 
@@ -156,7 +156,7 @@ class Chef
     DB = Chef::DB.new(nil, "node")
 
     # Create a new Chef::Node object.
-    def initialize(couchdb=nil)
+    def initialize(db=nil)
       @name = nil
 
       @chef_environment = '_default'
@@ -165,6 +165,8 @@ class Chef
       @default_attrs = Mash.new
       @automatic_attrs = Mash.new
       @run_list = Chef::RunList.new
+
+      @db = db || DB
 
       @run_state = {
         :template_cache => Hash.new,
@@ -482,21 +484,22 @@ class Chef
       display
     end
 
-    # Serialize this object as a hash
-    def to_json(*a)
-      result = {
+    def to_json_obj
+      {
         "name" => name,
         "chef_environment" => chef_environment,
         'json_class' => self.class.name,
         "automatic" => automatic_attrs,
         "normal" => normal_attrs,
-        "chef_type" => "node",
         "default" => default_attrs,
         "override" => override_attrs,
         "run_list" => run_list.run_list
       }
+    end
 
-      result.to_json(*a)
+    # Serialize this object as a hash
+    def to_json(*a)
+      to_json_obj.to_json(*a)
     end
 
     def update_from!(o)
@@ -582,7 +585,7 @@ class Chef
           { :fields => { :name => true, :_id => false }
         end
 
-      DB.list(inflate)
+      DB.list(opt)
     end
 
     def self.list(inflate=false)
@@ -598,13 +601,13 @@ class Chef
     end
 
     # Load a node by name from DB
-    def self.cdb_load(name, couchdb=nil)
+    def self.cdb_load(name, db=nil)
       (db || DB).load(name)
     end
 
-    def self.exists?(nodename, couchdb)
+    def self.exists?(nodename, db)
       begin
-        self.cdb_load(nodename, couchdb)
+        self.cdb_load(nodename, db)
       rescue Chef::Exceptions::CouchDBNotFound
         nil
       end
@@ -630,9 +633,9 @@ class Chef
       Chef::REST.new(Chef::Config[:chef_server_url]).get_rest("nodes/#{name}")
     end
 
-    # Remove this node from the CouchDB
+    # Remove this node from the DB
     def cdb_destroy
-      couchdb.delete("node", name, couchdb_rev)
+      db.delete(name)
     end
 
     # Remove this node via the REST API
@@ -640,9 +643,9 @@ class Chef
       chef_server_rest.delete_rest("nodes/#{name}")
     end
 
-    # Save this node to the CouchDB
+    # Save this node to the DB
     def cdb_save
-      @couchdb_rev = couchdb.store("node", name, self)["rev"]
+      db.store(name, to_json_obj)
     end
 
     # Save this node via the REST API
@@ -662,11 +665,6 @@ class Chef
     def create
       chef_server_rest.post_rest("nodes", self)
       self
-    end
-
-    # Set up our CouchDB design document
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("nodes", DESIGN_DOCUMENT)
     end
 
     def to_s

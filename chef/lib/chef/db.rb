@@ -44,16 +44,6 @@ class Chef
     # === Returns
     # The _id of the object
     def store(name, object)
-      validate(
-        {
-          :name => name,
-          :object => object,
-        },
-        {
-          :object => { :respond_to => :to_json },
-        }
-      )
-
       query_selector = { :name => name }
       @coll.update(query_selector, object, :upsert => true)
       id = @coll.find_one(query_selector)["_id"]
@@ -104,15 +94,16 @@ class Chef
 
     # Lists all entries from the database.
     #
-    # TODO: Confirm that design documents for different all and all_id are consistent across the codebase!
+    # === Arguments
+    # opt::: please refer to the opt parameter of Mongo::Collection.find
     #
     # === Returns
     # The cursor to the result
-    def list(inflate = false)
+    def list(opt = {})
       if inflate
         @coll.find
       else
-        @coll.find({}, { :fields => { :_id => false, :name => true }})
+        @coll.find({}, opt)
       end
     end
 
