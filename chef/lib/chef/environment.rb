@@ -40,7 +40,7 @@ class Chef
     attr_accessor :db
     attr_reader :id
 
-    DB = Chef::DB.new("environment")
+    DB = Chef::DB.new(nil, "environment")
 
     def initialize(db=nil)
       @name = ''

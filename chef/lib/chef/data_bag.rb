@@ -55,10 +55,10 @@ class Chef
 
     def name(arg=nil)
       set_or_return(
-        :name,
-        arg,
-        :regex => VALID_NAME
-      )
+                    :name,
+                    arg,
+                    :regex => VALID_NAME
+                    )
     end
 
     def to_hash
@@ -152,10 +152,10 @@ class Chef
       @db.delete(@name)
       
       # TODO: check why there can be multiple results, and why it needs to be deleted recursively
-#      rs["rows"].each do |row|
-#        row["doc"].couchdb = couchdb
-#        row["doc"].cdb_destroy
-#      end
+      #      rs["rows"].each do |row|
+      #        row["doc"].couchdb = couchdb
+      #        row["doc"].cdb_destroy
+      #      end
     end
 
     def destroy
@@ -186,13 +186,18 @@ class Chef
 
     # List all the items in this Bag from DB
     # The self.load method does this through the REST API
+    #
+    # === Returns
+    # TODO: flatten raw_data.id
+    # cursor to the result. Note that if inflate == false, only the raw_data.id
+    # field will be returned and this is nested.
     def list(inflate=false)
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
         if inflate then
           {}
         else
-          { :fields => { :name => true, :_id => false }
+          { :fields => { "raw_data.id" => true, :_id => false }}
         end
 
       DB.list(opt)

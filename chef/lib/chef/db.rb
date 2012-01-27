@@ -1,3 +1,20 @@
+#
+# Copyright:: Copyright (c) 2009 Opscode, Inc.
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 require 'chef/mixin/params_validate'
 require 'chef/config'
 require 'chef/rest'
@@ -28,9 +45,7 @@ class Chef
     RETRY_DELAY = Chef::Config[:http_retry_delay]
 
     def initialize(url, collection_name, opts = {})
-      @db_name = db_name
-
-      url ||= Chef::Config[:db_url]
+      url ||= Chef::Config[:db_loc]
       host, port = url.split(":")
       @db = Mongo::DB.new(Chef::Config[:database],
                           Mongo::Connection.new(host, port), opts)
@@ -55,8 +70,8 @@ class Chef
       id = @coll.find_one(query_selector)["_id"]
 
       if object.respond_to?(:add_to_index)
-        Chef::Log.info("Sending #{@db_name}(#{id}) to the index queue for addition.")
-        object.add_to_index(:database => database, :id => id, :type => @db_name)
+        Chef::Log.info("Sending #{database}(#{id}) to the index queue for addition.")
+        object.add_to_index(:database => database, :id => id, :type => database)
       end
 
       id
@@ -93,8 +108,8 @@ class Chef
       @coll.remove({ :name => name })
 
       if object.respond_to?(:delete_from_index)
-        Chef::Log.info("Sending #{@db_name}(#{id}) to the index queue for deletion..")
-        object.delete_from_index(:database => database, :id => object["_id"], :type => @db_name)
+        Chef::Log.info("Sending #{database}(#{id}) to the index queue for deletion..")
+        object.delete_from_index(:database => database, :id => object["_id"], :type => database)
       end
     end
 

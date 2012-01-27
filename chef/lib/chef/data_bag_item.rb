@@ -39,7 +39,7 @@ class Chef
     include Chef::IndexQueue::Indexable
 
     VALID_ID = /^[\-[:alnum:]_]+$/
-    DB = Chef::Db.new(nil, "data_bag_item")
+    DB = Chef::DB.new(nil, "data_bag_item")
 
     def self.validate_id!(id_str)
       if id_str.nil? || ( id_str !~ VALID_ID )

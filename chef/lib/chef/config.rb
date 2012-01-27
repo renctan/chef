@@ -142,7 +142,7 @@ class Chef
     # CouchDB database name to use
     database "chef"
 
-    db_url "http://localhost:27017"
+    db_loc "localhost:27017"
 
     # Where chef's cache files should be stored
     file_cache_path platform_specific_path("/var/chef/cache")
