@@ -142,7 +142,7 @@ describe Chef::SolrQuery do
 
   describe "rebuilding the index" do
     before do
-      Chef::Config[:couchdb_database] = "chunky_bacon"
+      Chef::Config[:database] = "chunky_bacon"
     end
 
     it "deletes the index and commits" do

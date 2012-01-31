@@ -640,80 +640,62 @@ describe Chef::Node do
     end
   end
 
-  describe "acting as a CouchDB-backed model" do
+  describe "acting as a DB-backed model" do
     before(:each) do
-      @couchdb = Chef::CouchDB.new
-      @mock_couch = mock('couch mock')
+      @db = Chef::Node::get_default_db
+
+      @mock_db = mock('Chef::DB')
+      @mock_db.stub!(:list)
+      Chef::DB.stub!(:new).and_return(@mock_db)
     end
 
     describe "list" do
-      before(:each) do
-        @mock_couch.stub!(:list).and_return(
-          { "rows" => [ { "value" => "a", "key" => "avenue" } ] }
-        )
-        Chef::CouchDB.stub!(:new).and_return(@mock_couch)
-      end
-
-      it "should retrieve a list of nodes from CouchDB" do
-        Chef::Node.cdb_list.should eql(["avenue"])
+      it "should retrieve a list of nodes from DB" do
+        @mock_db.should_receive(:list).with({ :fields => { :name => true, :_id => false }})
+        Chef::Node.cdb_list
       end
 
       it "should return just the ids if inflate is false" do
-        Chef::Node.cdb_list(false).should eql(["avenue"])
+        @mock_db.should_receive(:list).with({ :fields => { :name => true, :_id => false }})
+        Chef::Node.cdb_list(false)
       end
 
       it "should return the full objects if inflate is true" do
-        Chef::Node.cdb_list(true).should eql(["a"])
+        @mock_db.should_receive(:list).with({})
+        Chef::Node.cdb_list(true)
       end
     end
 
     describe "when loading a given node" do
-      it "should load a node from couchdb by name" do
-        @couchdb.should_receive(:load).with("node", "coffee").and_return(true)
-        Chef::CouchDB.stub!(:new).and_return(@couchdb)
+      it "should load a node from db by name" do
+        @db.should_receive(:load).with("coffee").and_return(true)
+        Chef::DB.stub!(:new).and_return(@db)
         Chef::Node.cdb_load("coffee")
       end
     end
 
     describe "when destroying a Node" do
-      it "should delete this node from couchdb" do
-        @couchdb.should_receive(:delete).with("node", "bob", 1).and_return(true)
-        Chef::CouchDB.stub!(:new).and_return(@couchdb)
+      it "should delete this node from db" do
+        @db.should_receive(:delete).with("bob").and_return(true)
+        Chef::DB.stub!(:new).and_return(@db)
         node = Chef::Node.new
         node.name "bob"
-        node.couchdb_rev = 1
         node.cdb_destroy
       end
     end
 
     describe "when saving a Node" do
       before(:each) do
-        @couchdb.stub!(:store).and_return({ "rev" => 33 })
-        Chef::CouchDB.stub!(:new).and_return(@couchdb)
+        @db.stub!(:store)
+        Chef::DB.stub!(:new).and_return(@db)
         @node = Chef::Node.new
         @node.name "bob"
-        @node.couchdb_rev = 1
       end
 
-      it "should save the node to couchdb" do
-        @couchdb.should_receive(:store).with("node", "bob", @node).and_return({ "rev" => 33 })
+      it "should save the node to db" do
+        @db.should_receive(:store).with(@node.to_json_obj)
         @node.cdb_save
       end
-
-      it "should store the new couchdb_rev" do
-        @node.cdb_save
-        @node.couchdb_rev.should eql(33)
-      end
     end
-
-    describe "create_design_document" do
-      it "should create our design document" do
-        @couchdb.should_receive(:create_design_document).with("nodes", Chef::Node::DESIGN_DOCUMENT)
-        Chef::CouchDB.stub!(:new).and_return(@couchdb)
-        Chef::Node.create_design_document
-      end
-    end
-
   end
-
 end

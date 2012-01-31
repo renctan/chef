@@ -38,8 +38,6 @@ class Chef
     attr_accessor :db
     attr_reader :id
 
-    DB = Chef::DB.new(nil, "role")
-
     # Create a new Chef::Role object.
     def initialize(db=nil)
       @name = ''
@@ -48,7 +46,11 @@ class Chef
       @override_attributes = Mash.new
       @env_run_lists = {"_default" => Chef::RunList.new}
       @id = nil
-      @db = db || DB
+      @db = db || Role::get_default_db
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "role")
     end
 
     def id=(value)
@@ -196,7 +198,7 @@ class Chef
     # List all the Chef::Role objects in the DB.  If inflate is set to true, you will get
     # the full list of all Roles, fully inflated.
     def self.cdb_list(inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
       
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
@@ -206,7 +208,7 @@ class Chef
           { :fields => { :name => true, :_id => false }}
         end
 
-      DB.list(opt)
+      db.list(opt)
     end
 
     # Get the list of all roles from the API.
@@ -224,7 +226,7 @@ class Chef
 
     # Load a role by name from DB
     def self.cdb_load(name, db=nil)
-      (db || DB).load(name)
+      (db || get_default_db).load(name)
     end
 
     # Load a role by name from the API

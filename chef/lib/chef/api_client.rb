@@ -42,8 +42,6 @@ class Chef
 
     attr_accessor :id, :db
 
-    DB = Chef::DB.new(nil, "client")
-
     # Create a new Chef::ApiClient object.
     def initialize(db=nil)
       @name = ''
@@ -51,7 +49,11 @@ class Chef
       @private_key = nil
       @id = nil
       @admin = false
-      @db = (db || DB)
+      @db = (db || ApiClient::get_default_db)
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "client")
     end
 
     # Gets or sets the client name.
@@ -153,7 +155,7 @@ class Chef
     # List all the Chef::ApiClient objects in the DB.  If inflate is set
     # to true, you will get the full list of all ApiClients, fully inflated.
     def self.cdb_list(inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
@@ -184,7 +186,7 @@ class Chef
     # @params [String] The name of the client to load
     # @return [Chef::ApiClient] The resulting Chef::ApiClient object
     def self.cdb_load(name, db=nil)
-      (db || DB).load(name)
+      (db || get_default_db).load(name)
     end
 
     # Load a client by name via the API

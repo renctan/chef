@@ -36,8 +36,6 @@ class Chef
 
     VALID_NAME = /^[\-[:alnum:]_]+$/
 
-    DB = Chef::DB.new(nil, "data_bag")
-
     def self.validate_name!(name)
       unless name =~ VALID_NAME
         raise Exceptions::InvalidDataBagName, "DataBags must have a name matching #{VALID_NAME.inspect}, you gave #{name.inspect}"
@@ -50,7 +48,11 @@ class Chef
     def initialize(db=nil)
       @name = ''
       @id = nil
-      @db = (db || DB)
+      @db = (db || DataBag::get_default_db)
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "data_bag")
     end
 
     def name(arg=nil)
@@ -99,7 +101,7 @@ class Chef
     # List all the Chef::DataBag objects in the DB.  If inflate is set to true, you will get
     # the full list of all Roles, fully inflated.
     def self.cdb_list(inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
@@ -127,7 +129,7 @@ class Chef
 
     # Load a Data Bag by name from DB
     def self.cdb_load(name, db=nil)
-      (db || DB).load(name)
+      (db || get_default_db).load(name)
     end
 
     # Load a Data Bag by name via either the RESTful API or local data_bag_path if run in solo mode
@@ -200,7 +202,7 @@ class Chef
           { :fields => { "raw_data.id" => true, :_id => false }}
         end
 
-      DB.list(opt)
+      @db.list(opt)
     end
 
     # As a string

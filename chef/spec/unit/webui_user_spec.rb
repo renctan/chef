@@ -45,8 +45,7 @@ describe Chef::WebUIUser do
     webui_user.salt.should        == 'just_a_lil'
     webui_user.password.should    == 'beefded'
     webui_user.openid.should      == 'notsomuch'
-    webui_user.couchdb_rev.should == '0'
-    webui_user.couchdb_id.should  == 'tehid'
+    webui_user.id.should  == 'tehid'
   end
   
   describe "when setting or verifying a password" do
@@ -133,43 +132,34 @@ describe Chef::WebUIUser do
   describe "when doing CRUD operations to the DB" do
     before do
       @webui_user.name = "relaxed_test"
-      @couchdb = mock("Chef::Couchdb")
-      Chef::CouchDB.stub(:new).and_return(@couchdb)
-      @webui_user.instance_variable_set(:@couchdb, @couchdb)
+      @db = mock("Chef::DB")
+      Chef::DB.stub(:new).and_return(@db)
+      @webui_user.instance_variable_set(:@db, @db)
     end
     
     it "finds users by name" do
-      @couchdb.should_receive(:load).with("webui_user", "test_user")
+      @db.should_receive(:load).with("test_user")
       Chef::WebUIUser.cdb_load("test_user")
     end
     
     it "finds all ids in the database" do
-      couch_rows = {"one"=>"mos_def","two"=>"and","three"=>"talib_kweli"}.map do |key, val|
-        {"key" => key, "value" => val}
-      end
-      couch_return_val = {"rows" => couch_rows}
-      @couchdb.should_receive(:list).with("users", false).and_return(couch_return_val)
-      Chef::WebUIUser.cdb_list.sort.should == %w{one two three}.sort
+      @db.should_receive(:list).with({ :fields => { :name => true, :_id => false }})
+      result = Chef::WebUIUser.cdb_list
     end
     
     it "finds all documents in the database" do
-      couch_rows = {"one"=>"mos_def","two"=>"and","three"=>"talib_kweli"}.map do |key, val|
-        {"key" => key, "value" => val}
-      end
-      couch_return_val = {"rows" => couch_rows}
-      @couchdb.should_receive(:list).with("users", true).and_return(couch_return_val)
-      Chef::WebUIUser.cdb_list(true).sort.should == %w{mos_def and talib_kweli}.sort
+      @db.should_receive(:list).with({})
+      Chef::WebUIUser.cdb_list(true)
     end
     
     it "updates and saves documents" do
-      @couchdb.should_receive(:store).with("webui_user", "relaxed_test", @webui_user).and_return("rev"=>"run")
+      @db.should_receive(:store).with(@webui_user.to_json_obj)
       @webui_user.cdb_save
-      @webui_user.couchdb_rev.should == "run"
     end
     
     it "deletes itself" do
-      @webui_user = Chef::WebUIUser.new("_rev" => "run", "name" => "relaxed_test")
-      @couchdb.should_receive(:delete).with("webui_user", "relaxed_test", "run")
+      @webui_user = Chef::WebUIUser.new("name" => "relaxed_test")
+      @db.should_receive(:delete).with("relaxed_test")
       @webui_user.cdb_destroy
     end
   end
@@ -194,14 +184,8 @@ describe Chef::WebUIUser do
       json.should match(Regexp.escape('"openid":"really?"'))
       json.should match(Regexp.escape('"admin":true'))
     end
-    
-    it "includes the couchdb _rev if available" do
-      @webui_user = Chef::WebUIUser.new("_rev"=>"RuN")
-      json = @webui_user.to_json
-      json.should match(Regexp.escape('"_rev":"RuN"'))
-    end
-    
-    it "includes the couchdb _id if available" do
+        
+    it "includes the _id if available" do
       @webui_user = Chef::WebUIUser.new("_id"=>"ego")
       json = @webui_user.to_json
       json.should match(Regexp.escape('"_id":"ego"'))
@@ -210,29 +194,16 @@ describe Chef::WebUIUser do
   
   describe "behaving like a couch-able (relaxed?) object (cf CHEF-864)" do
     it "has an attr reader for couchdb_id" do
-      @webui_user.should_not respond_to(:couchdb_id=)
-      @webui_user.should respond_to(:couchdb_id)
-      @webui_user.instance_variable_set(:@couchdb_id, "a big long UUID")
-      @webui_user.couchdb_id.should == "a big long UUID"
+      @webui_user.should_not respond_to(:id=)
+      @webui_user.should respond_to(:id)
+      @webui_user.instance_variable_set(:@id, "a big long UUID")
+      @webui_user.id.should == "a big long UUID"
     end
     
     it "sets its couchdb id when loading from the database" do
       # reqs via REST eventually get to Chef::JSONCompat.from_json
       webui_user = Chef::JSONCompat.from_json('{"salt":null,"name":"test_user","json_class":"Chef::WebUIUser","admin":false,"openid":null,"password":null,"chef_type":"webui_user","_id":"IdontNeedNoID"}')
-      webui_user.couchdb_id.should == "IdontNeedNoID"
-    end
-    
-    it "has an attr reader for couchdb_rev" do
-      @webui_user.should_not respond_to(:couchdb_rev=)
-      @webui_user.should respond_to(:couchdb_rev)
-      @webui_user.instance_variable_set(:@couchdb_rev, "a couchdb version string")
-      @webui_user.couchdb_rev.should == "a couchdb version string"
-    end
-    
-    it "sets the couchdb_rev when loading from the database" do
-      webui_user = Chef::JSONCompat.from_json('{"salt":null,"name":"test_user","json_class":"Chef::WebUIUser","admin":false,"openid":null,"password":null,"chef_type":"webui_user","_id":"IdontNeedNoID","_rev":"moto"}')
-      webui_user.couchdb_rev.should == "moto"
+      webui_user.id.should == "IdontNeedNoID"
     end
   end
-  
 end

@@ -121,11 +121,7 @@ class Chef
     # === Returns
     # The cursor to the result
     def list(opt = {})
-      if inflate
-        @coll.find
-      else
-        @coll.find({}, opt)
-      end
+      @coll.find({}, opt)
     end
 
     def has_key?(name)

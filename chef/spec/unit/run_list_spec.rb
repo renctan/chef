@@ -244,7 +244,7 @@ describe Chef::RunList do
     describe "from couchdb" do
       it "should load the role from couchdb" do
         Chef::Role.should_receive(:cdb_load).and_return(@role)
-        @run_list.expand("_default", "couchdb")
+        @run_list.expand("_default", "db")
       end
     end
 

@@ -40,15 +40,17 @@ class Chef
     attr_accessor :db
     attr_reader :id
 
-    DB = Chef::DB.new(nil, "environment")
-
     def initialize(db=nil)
       @name = ''
       @description = ''
       @default_attributes = Mash.new
       @override_attributes = Mash.new
       @cookbook_versions = Hash.new
-      @db = db || DB
+      @db = db || Environment::get_default_db
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "environment")
     end
 
     def id=(value)
@@ -235,7 +237,7 @@ class Chef
     end
 
     def self.cdb_list(inflate=false, db=nil)
-      (db || DB).list(inflate)
+      (db || get_default_db).list(inflate)
     end
 
     def self.list(inflate=false)
@@ -248,7 +250,7 @@ class Chef
     end
 
     def self.cdb_load(name, db=nil)
-      (db || DB).load(name)
+      (db || get_default_db).load(name)
     end
 
     def self.load(name)
@@ -411,7 +413,7 @@ class Chef
     end
 
     def self.create_default_environment(db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       begin
         Chef::Environment.cdb_load('_default', db)

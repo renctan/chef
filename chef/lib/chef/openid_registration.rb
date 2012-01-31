@@ -31,8 +31,6 @@ class Chef
     include Chef::Mixin::ParamsValidate
     include Chef::IndexQueue::Indexable
     
-    DB = Chef::DB.new(nil, "openid_registration")
-
     # Create a new Chef::OpenIDRegistration object.
     def initialize()
       @name = nil
@@ -40,9 +38,13 @@ class Chef
       @password = nil
       @validated = false
       @admin = false
-      @db = DB
+      @db = OpenIDRegistration::get_default_db
     end
-    
+
+    def self.get_default_db
+      Chef::DB.new(nil, "openid_registration")
+    end
+
     def name=(n)
       @name = n.gsub(/\./, '_')
     end
@@ -92,7 +94,7 @@ class Chef
           { :fields => { :name => true, :_id => false }}
         end
 
-      DB.list(opt)
+      get_default_db.list(opt)
     end
     
     def self.cdb_list(*args)
@@ -101,12 +103,12 @@ class Chef
     
     # Load an OpenIDRegistration by name from DB
     def self.load(name)
-      DB.load(name)
+      get_default_db.load(name)
     end
     
     # Whether or not there is an OpenID Registration with this key.
     def self.has_key?(name)
-      DB.has_key?(name)
+      get_default_db.has_key?(name)
     end
     
     # Remove this OpenIDRegistration from the DB

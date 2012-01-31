@@ -33,16 +33,18 @@ class Chef
     
     include Chef::Mixin::ParamsValidate
 
-    DB = Chef::DB.new(nil, "webui_user")
-
     # Create a new Chef::WebUIUser object.
     def initialize(opts={})
       @name, @salt, @password = opts['name'], opts['salt'], opts['password']
       @openid, @id = opts['openid'], opts['_id']
       @admin = false
-      @db = DB
+      @db = WebUIUser::get_default_db
     end
     
+    def self.get_default_db
+      Chef::DB.new(nil, "webui_user")
+    end
+
     def name=(n)
       @name = n.gsub(/\./, '_')
     end
@@ -108,7 +110,7 @@ class Chef
           { :fields => { :name => true, :_id => false }}
         end
 
-      db.list(opt)
+      get_default_db.list(opt)
     end
     
     def self.list(inflate=false)
@@ -126,7 +128,7 @@ class Chef
     
     # Load an WebUIUser by name from DB
     def self.cdb_load(name)
-      DB.load(name)
+      get_default_db.load(name)
     end
     
     # Load a User by name
@@ -138,12 +140,12 @@ class Chef
     
     # Whether or not there is an WebUIUser with this key.
     def self.has_key?(name)
-      DB.has_key?(name)
+      get_default_db.has_key?(name)
     end
     
     # Remove this WebUIUser from the DB
     def cdb_destroy
-      db.delete(@name)
+      @db.delete(@name)
     end
     
     # Remove this WebUIUser via the REST API
@@ -154,7 +156,7 @@ class Chef
     
     # Save this WebUIUser to the DB
     def cdb_save
-      db.store(to_json_obj)
+      @db.store(to_json_obj)
     end
     
     # Save this WebUIUser via the REST API

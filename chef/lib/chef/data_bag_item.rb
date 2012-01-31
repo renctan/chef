@@ -39,8 +39,7 @@ class Chef
     include Chef::IndexQueue::Indexable
 
     VALID_ID = /^[\-[:alnum:]_]+$/
-    DB = Chef::DB.new(nil, "data_bag_item")
-
+    
     def self.validate_id!(id_str)
       if id_str.nil? || ( id_str !~ VALID_ID )
         raise Exceptions::InvalidDataBagItemID, "Data Bag items must have an id matching #{VALID_ID.inspect}, you gave: #{id_str.inspect}"
@@ -58,7 +57,11 @@ class Chef
       @id = nil
       @data_bag = nil
       @raw_data = Mash.new
-      @db = db || DB
+      @db = db || DataBagItem::get_default_db
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "data_bag_item")
     end
 
     def chef_server_rest
@@ -156,7 +159,7 @@ class Chef
 
     # Load a Data Bag Item by name from DB
     def self.cdb_load(data_bag, name, db=nil)
-      (db || DB).load(object_name(data_bag, name))
+      (db || get_default_db).load(object_name(data_bag, name))
     end
 
     # Load a Data Bag Item by name via either the RESTful API or local data_bag_path if run in solo mode

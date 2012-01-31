@@ -108,7 +108,7 @@ class Chef
       if !object_ids.empty?
         # TODO: Remove method? This breaks in Mongo implementation if left as is,
         #  but is not being used anywhere.
-        @bulk_objects ||= @db.bulk_get(object_ids)
+        @bulk_objects ||= @database.bulk_get(object_ids)
         Chef::Log.debug { "Bulk get of objects: #{@bulk_objects.inspect}" }
         @bulk_objects
       else

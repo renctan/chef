@@ -44,7 +44,7 @@ describe Chef::OpenIDRegistration, "to_json" do
     oreg = Chef::OpenIDRegistration.new
     oreg.set_password("monkey")
     json = oreg.to_json
-    %w{json_class chef_type name salt password validated}.each do |verify|
+    %w{json_class name salt password validated}.each do |verify|
       json.should =~ /#{verify}/
     end
   end
@@ -66,87 +66,66 @@ end
 
 describe Chef::OpenIDRegistration, "list" do  
   before(:each) do
-    @mock_couch = mock("Chef::CouchDB")
-    @mock_couch.stub!(:list).and_return({
-      "rows" => [
-        {
-          "value" => "a",
-          "key"   => "avenue"
-        }
-      ]
-    })
-    Chef::CouchDB.stub!(:new).and_return(@mock_couch)
+    @mock_db = mock("Chef::DB")
+    @mock_db.stub!(:list)
+    Chef::DB.stub!(:new).and_return(@mock_db)
   end
   
-  it "should retrieve a list of nodes from CouchDB" do
-    Chef::OpenIDRegistration.list.should eql(["avenue"])
+  it "should retrieve a list of nodes from DB" do
+    @mock_db.should_receive(:list).with({ :fields => { :name => true, :_id => false }})
+    Chef::OpenIDRegistration.list
   end
   
   it "should return just the ids if inflate is false" do
-    Chef::OpenIDRegistration.list(false).should eql(["avenue"])
+    @mock_db.should_receive(:list).with({ :fields => { :name => true, :_id => false }})
+    Chef::OpenIDRegistration.list(false)
   end
   
   it "should return the full objects if inflate is true" do
-    Chef::OpenIDRegistration.list(true).should eql(["a"])
+    @mock_db.should_receive(:list).with({})
+    Chef::OpenIDRegistration.list(true)
   end
 end
 
 describe Chef::OpenIDRegistration, "load" do
-  it "should load a registration from couchdb by name" do
-    @mock_couch = mock("Chef::CouchDB")
-    Chef::CouchDB.stub!(:new).and_return(@mock_couch)
-    @mock_couch.should_receive(:load).with("openid_registration", "coffee").and_return(true)
+  it "should load a registration from db by name" do
+    @mock_db = mock("Chef::DB")
+    Chef::DB.stub!(:new).and_return(@mock_db)
+    @mock_db.should_receive(:load).with("coffee")
     Chef::OpenIDRegistration.load("coffee")
   end
 end
 
 describe Chef::OpenIDRegistration, "destroy" do
-  it "should delete this registration from couchdb" do
-    @mock_couch = mock("Chef::CouchDB")
-    @mock_couch.should_receive(:delete).with("openid_registration", "bob", 1).and_return(true)
-    Chef::CouchDB.stub!(:new).and_return(@mock_couch)
+  it "should delete this registration from db" do
+    @mock_db = mock("Chef::DB")
+    @mock_db.should_receive(:delete).with("bob")
+    Chef::DB.stub!(:new).and_return(@mock_db)
     reg = Chef::OpenIDRegistration.new
     reg.name = "bob"
-    reg.couchdb_rev = 1
     reg.destroy
   end
 end
 
 describe Chef::OpenIDRegistration, "save" do
   before(:each) do
-    @mock_couch = mock("Chef::CouchDB")
-    Chef::CouchDB.stub!(:new).and_return(@mock_couch)
+    @mock_db = mock("Chef::DB")
+    Chef::DB.stub!(:new).and_return(@mock_db)
     @reg = Chef::OpenIDRegistration.new
     @reg.name = "bob"
-    @reg.couchdb_rev = 1
   end
   
-  it "should save the registration to couchdb" do
-    @mock_couch.should_receive(:store).with("openid_registration", "bob", @reg).and_return({ "rev" => 33 }) 
+  it "should save the registration to db" do
+    @mock_db.should_receive(:store).with(@reg.to_json_obj)
     @reg.save
-  end
-  
-  it "should store the new couchdb_rev" do
-    @mock_couch.stub!(:store).with("openid_registration", "bob", @reg).and_return({ "rev" => 33 }) 
-    @reg.save
-    @reg.couchdb_rev.should eql(33)
-  end
-end
-
-describe Chef::OpenIDRegistration, "create_design_document" do
-  it "should create our design document" do
-    mock_couch = mock("Chef::CouchDB")
-    mock_couch.should_receive(:create_design_document).with("registrations", Chef::OpenIDRegistration::DESIGN_DOCUMENT)
-    Chef::CouchDB.stub!(:new).and_return(mock_couch)
-    Chef::OpenIDRegistration.create_design_document
   end
 end
 
 describe Chef::OpenIDRegistration, "has_key?" do
-  it "should check with CouchDB for a registration with this key" do
-    @mock_couch = mock("Chef::CouchDB")
-    @mock_couch.should_receive(:has_key?).with("openid_registration", "bob").and_return(true)
-    Chef::CouchDB.stub!(:new).and_return(@mock_couch)
+  it "should check with DB for a registration with this key" do
+    @mock_db = mock("Chef::DB")
+    @mock_db.should_receive(:has_key?).with("bob")
+    Chef::DB.stub!(:new).and_return(@mock_db)
     Chef::OpenIDRegistration.has_key?("bob")
   end
 end

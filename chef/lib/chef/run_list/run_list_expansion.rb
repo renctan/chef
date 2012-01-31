@@ -176,14 +176,14 @@ class Chef
     end
 
     # Expand a run list from couchdb. Used in chef-server-api
-    class RunListExpansionFromCouchDB < RunListExpansion
+    class RunListExpansionFromDB < RunListExpansion
 
-      def couchdb
+      def db
         source
       end
 
       def fetch_role(name)
-        Chef::Role.cdb_load(name, couchdb)
+        Chef::Role.cdb_load(name, db)
       rescue Chef::Exceptions::CouchDBNotFound
         role_not_found(name)
       end

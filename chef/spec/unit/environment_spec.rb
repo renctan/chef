@@ -179,10 +179,6 @@ describe Chef::Environment do
     it "should include 'json_class'" do
       @hash["json_class"].should == "Chef::Environment"
     end
-
-    it "should include 'chef_type'" do
-      @hash["chef_type"].should == "environment"
-    end
   end
 
   describe "to_json" do
@@ -202,10 +198,6 @@ describe Chef::Environment do
     it "should include 'json_class'" do
       @json.should =~ /"json_class":"Chef::Environment"/
     end
-
-    it "should include 'chef_type'" do
-      @json.should =~ /"chef_type":"environment"/
-    end
   end
 
   describe "from_json" do
@@ -219,7 +211,6 @@ describe Chef::Environment do
           "apache2" => "= 2.0.0"
         },
         "json_class" => "Chef::Environment",
-        "chef_type" => "environment"
       }
       @environment = Chef::JSONCompat.from_json(@data.to_json)
     end
@@ -313,9 +304,9 @@ describe Chef::Environment do
       res["god"].detect {|cb| cb.version == "4.2.0"}.should_not == nil
     end
 
-    it "should produce correct results, regardless of the cookbook order in couch" do
+    it "should produce correct results, regardless of the cookbook order in db" do
       # a bug present before the environments feature defaulted to the last CookbookVersion
-      # object for a cookbook as returned from couchdb when fetching cookbooks for a node
+      # object for a cookbook as returned from db when fetching cookbooks for a node
       # this is a regression test
       @all_cookbooks << begin
         cv = Chef::CookbookVersion.new("god")
@@ -378,16 +369,16 @@ describe Chef::Environment do
 
   describe "self.create_default_environment" do
     it "should check if the '_default' environment exists" do
-      @couchdb = Chef::CouchDB.new
-      Chef::CouchDB.stub!(:new).and_return @couchdb
-      Chef::Environment.should_receive(:cdb_load).with('_default', Chef::CouchDB.new)
+      @db = Chef::Environment.get_default_db
+      Chef::DB.stub!(:new).and_return @db
+      Chef::Environment.should_receive(:cdb_load).with('_default', Chef::Environment.get_default_db)
       Chef::Environment.create_default_environment
     end
 
     it "should not re-create the environment if it exists" do
-      @couchdb = Chef::CouchDB.new
-      Chef::CouchDB.stub!(:new).and_return @couchdb
-      Chef::Environment.should_receive(:cdb_load).with('_default', Chef::CouchDB.new).and_return true
+      @db = Chef::Environment.get_default_db
+      Chef::DB.stub!(:new).and_return @db
+      Chef::Environment.should_receive(:cdb_load).with('_default', Chef::Environment.get_default_db).and_return true
       Chef::Environment.should_not_receive(:new)
       Chef::Environment.create_default_environment
     end
@@ -395,11 +386,12 @@ describe Chef::Environment do
     it "should create the environment if it doesn't exist" do
       @env = Chef::Environment.new
       @env.stub!(:cdb_save).and_return true
-      @couchdb = Chef::CouchDB.new
+      @db = Chef::Environment.get_default_db
       Chef::Environment.stub!(:new).and_return @env
-      Chef::CouchDB.stub!(:new).and_return @couchdb
+      Chef::DB.stub!(:new).and_return @db
 
-      Chef::Environment.should_receive(:cdb_load).with('_default', Chef::CouchDB.new).and_raise(Chef::Exceptions::CouchDBNotFound)
+      Chef::Environment.should_receive(:cdb_load).with('_default',
+        Chef::Environment.get_default_db).and_raise(Chef::Exceptions::CouchDBNotFound)
       Chef::Environment.should_receive(:new)
       Chef::Environment.create_default_environment
     end

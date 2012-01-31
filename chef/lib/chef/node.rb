@@ -60,8 +60,6 @@ class Chef
     include Chef::Mixin::LanguageIncludeAttribute
     include Chef::IndexQueue::Indexable
 
-    DB = Chef::DB.new(nil, "node")
-
     # Create a new Chef::Node object.
     def initialize(db=nil)
       @name = nil
@@ -73,7 +71,7 @@ class Chef
       @automatic_attrs = Mash.new
       @run_list = Chef::RunList.new
 
-      @db = db || DB
+      @db = db || Node::get_default_db
 
       @run_state = {
         :template_cache => Hash.new,
@@ -83,6 +81,10 @@ class Chef
       # TODO: 5/20/2010 need this here as long as other objects try to access
       # the cookbook collection via Node, otherwise get NoMethodError on nil.
       @cookbook_collection = CookbookCollection.new
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "node")
     end
 
     def id=(value)
@@ -453,7 +455,7 @@ class Chef
     # === Returns
     # the cursor to the query
     def self.cdb_list_by_environment(environment, inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       # Note: all docs created by this class have the chef_environment field
       db.find({ :chef_environment => environment }, opt)
@@ -475,7 +477,7 @@ class Chef
     # === Returns
     # The cursor to the result.
     def self.cdb_list(inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
@@ -502,7 +504,7 @@ class Chef
 
     # Load a node by name from DB
     def self.cdb_load(name, db=nil)
-      (db || DB).load(name)
+      (db || get_default_db).load(name)
     end
 
     def self.exists?(nodename, db)
