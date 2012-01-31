@@ -50,13 +50,13 @@ end
 
 task :default => :spec
 
-def start_couchdb(type="normal")
-  @couchdb_server_pid  = nil
+def start_db(type="normal")
+  @db_server_pid  = nil
   cid = fork
   if cid
-    @couchdb_server_pid = cid
+    @db_server_pid = cid
   else
-    exec("couchdb")
+    exec("mongod")
   end
 end
 
@@ -154,7 +154,7 @@ def start_chef_webui(type="normal")
 end
 
 def start_dev_environment(type="normal")
-  start_couchdb(type)
+  start_db(type)
   start_rabbitmq(type)
   sleep 2
   configure_rabbitmq(type)
@@ -162,7 +162,7 @@ def start_dev_environment(type="normal")
   start_chef_expander(type)
   start_chef_server(type)
   start_chef_webui(type)
-  puts "Running CouchDB at #{@couchdb_server_pid}"
+  puts "Running DB at #{@db_server_pid}"
   puts "Running RabbitMQ at #{@rabbitmq_server_pid}"
   puts "Running Chef Solr at #{@chef_solr_pid}"
   puts "Running Chef Solr Indexer at #{@chef_solr_indexer_pid}"
@@ -187,9 +187,9 @@ def stop_dev_environment
     puts "Stopping Chef Solr Indexer"
     Process.kill("INT", @chef_solr_indexer_pid)
   end
-  if @couchdb_server_pid
-    puts "Stopping CouchDB"
-    Process.kill("KILL", @couchdb_server_pid)
+  if @db_server_pid
+    puts "Stopping DB"
+    Process.kill("KILL", @db_server_pid)
   end
   if @rabbitmq_server_pid
     puts "Stopping RabbitMQ"
@@ -226,9 +226,9 @@ namespace :dev do
   namespace :features do
 
     namespace :start do
-      desc "Start CouchDB for testing"
-      task :couchdb do
-        start_couchdb("features")
+      desc "Start DB for testing"
+      task :db do
+        start_db("features")
         wait_for_ctrlc
       end
 
@@ -267,9 +267,9 @@ namespace :dev do
   end
 
   namespace :start do
-    desc "Start CouchDB"
-    task :couchdb do
-      start_couchdb
+    desc "Start DB"
+    task :db do
+      start_db
       wait_for_ctrlc
     end
 

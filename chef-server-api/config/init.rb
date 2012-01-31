@@ -64,19 +64,6 @@ Merb::Config.use do |c|
 end
 
 unless Merb::Config.environment == "test"
-  # create the couch design docs for nodes, roles, and databags
-  Chef::CouchDB.new.create_db
-  Chef::CouchDB.new.create_id_map
-  Chef::Node.create_design_document
-  Chef::Role.create_design_document
-  Chef::DataBag.create_design_document
-  Chef::ApiClient.create_design_document
-  Chef::WebUIUser.create_design_document
-  Chef::CookbookVersion.create_design_document
-  Chef::Sandbox.create_design_document
-  Chef::Checksum.create_design_document
-  Chef::Environment.create_design_document
-
   # Create the signing key and certificate
   Chef::Certificate.generate_signing_ca
 
@@ -90,5 +77,5 @@ unless Merb::Config.environment == "test"
   Chef::Environment.create_default_environment
 
   Chef::Log.info('Loading roles')
-  Chef::Role.sync_from_disk_to_couchdb
+  Chef::Role.sync_from_disk_to_db
 end
