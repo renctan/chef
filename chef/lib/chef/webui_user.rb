@@ -100,7 +100,7 @@ class Chef
     # the full list of all registration objects.  Otherwise, you'll just get the IDs
     #
     # === Returns
-    # The cursor to the result.
+    # The array that contains the result.
     def self.cdb_list(inflate=false)
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 

@@ -119,9 +119,9 @@ class Chef
     # opt::: please refer to the opt parameter of Mongo::Collection.find
     #
     # === Returns
-    # The cursor to the result
+    # The array that contains the result
     def list(opt = {})
-      @coll.find({}, opt)
+      @coll.find({}, opt).to_a
     end
 
     def has_key?(name)

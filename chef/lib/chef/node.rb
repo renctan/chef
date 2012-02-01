@@ -453,12 +453,12 @@ class Chef
     # db - database instance that can be used to perform the query.
     #
     # === Returns
-    # the cursor to the query
+    # an array that contains the result
     def self.cdb_list_by_environment(environment, inflate=false, db=nil)
       db ||= get_default_db
 
       # Note: all docs created by this class have the chef_environment field
-      db.find({ :chef_environment => environment }, opt)
+      db.find({ :chef_environment => environment }, opt).to_a
     end
 
     def self.list_by_environment(environment, inflate=false)
@@ -473,9 +473,6 @@ class Chef
 
     # List all the Chef::Node objects in the DB.  If inflate is set to true, you will get
     # the full list of all Nodes, fully inflated.
-    #
-    # === Returns
-    # The cursor to the result.
     def self.cdb_list(inflate=false, db=nil)
       db ||= get_default_db
 

@@ -191,7 +191,7 @@ class Chef
     #
     # === Returns
     # TODO: flatten raw_data.id
-    # cursor to the result. Note that if inflate == false, only the raw_data.id
+    # array that contains the result. Note that if inflate == false, only the raw_data.id
     # field will be returned and this is nested.
     def list(inflate=false)
       # TODO: confirm if not showing _id is really the desired behavior

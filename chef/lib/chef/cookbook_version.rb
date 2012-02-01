@@ -65,7 +65,7 @@ class Chef
       # {"id"=>"1a806f1c-b409-4d8e-abab-fa414ff5b96d", "key"=>"activemq", "value"=>{"version"=>"0.3.3", "deps"=>{"java"=>">= 0.0.0", "runit"=>">= 0.0.0"}}}
       db ||= CookbookVersion::get_default_db
       opt = { :fields => { "doc.version" => true, doc.metadata.dependencies => true }}
-      db.list(opt).to_a.map do |doc|
+      db.list(opt).map do |doc|
         self.new({:version => doc.version, :deps => doc.metadata.dependencies})
       end
     end
@@ -877,11 +877,11 @@ JS
 
       if inflate
         opt = { :fields => { :name => true, :_id => false }}
-        db.list(opt).to_a.map{ |r| r["name"]}
+        db.list(opt).map{ |r| r["name"]}
       else
         opt = { :fields => { :cookbook_name => true, :version => true }}
 
-        result = db.list(opt).to_a.inject({}) do |mapped, row|
+        result = db.list(opt).inject({}) do |mapped, row|
           k = row["name"]
           mapped[k] ||= Array.new
           mapped[k].push(Chef::Version.new(row["version"]))
