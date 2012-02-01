@@ -78,7 +78,6 @@ class Nodes < Application
       raise NotFound, "Cannot load node #{params[:id]}"
     end
     @node.cdb_destroy
-    @node.couchdb_rev = nil
     display @node
   end
 

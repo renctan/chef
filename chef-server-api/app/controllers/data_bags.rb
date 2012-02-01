@@ -28,7 +28,7 @@ class DataBags < Application
   
   def index
     @bag_list = Chef::DataBag.cdb_list(false)
-    display(@bag_list.inject({}) { |r,b| r[b] = absolute_url(:datum, :id => b); r })
+    display(@bag_list.inject({}) { |r,b| r[b.name] = absolute_url(:datum, :id => b.name); r })
     
   end
 
@@ -38,7 +38,7 @@ class DataBags < Application
     rescue Chef::Exceptions::CouchDBNotFound => e
       raise NotFound, "Cannot load data bag #{params[:id]}"
     end
-    display(@data_bag.list.inject({}) { |res, i| res[i] = absolute_url(:data_bag_item, :data_bag_id => @data_bag.name, :id => i); res })
+    display(@data_bag.list.inject({}) { |res, i| res[i.name] = absolute_url(:data_bag_item, :data_bag_id => @data_bag.name, :id => i.name); res })
   end
 
   def create
@@ -68,7 +68,6 @@ class DataBags < Application
       raise NotFound, "Cannot load data bag #{params[:id]}"
     end
     @data_bag.cdb_destroy
-    @data_bag.couchdb_rev = nil
     display @data_bag
   end
   

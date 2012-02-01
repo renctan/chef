@@ -101,7 +101,7 @@ class DataItem < Application
       raise NotFound, "Cannot load data bag #{params[:data_bag_id]} item #{params[:id]}"
     end
     @data_bag_item.cdb_destroy
-    @data_bag_item.couchdb_rev = nil
+
     display @data_bag_item
   end
   

@@ -19,7 +19,7 @@ class Roles < Application
     rescue Chef::Exceptions::CouchDBNotFound => e
       raise NotFound, "Cannot load role #{params[:id]}"
     end
-    @role.couchdb_rev = nil
+
     display @role
   end
 
@@ -51,7 +51,6 @@ class Roles < Application
     @role.update_from!(params["inflated_object"])
     @role.cdb_save
     self.status = 200
-    @role.couchdb_rev = nil
     display(@role)
   end
 

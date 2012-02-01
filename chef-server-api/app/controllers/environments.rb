@@ -73,7 +73,6 @@ class Environments < Application
 
     env.update_from!(params["inflated_object"])
     env.cdb_save
-    env.couchdb_rev = nil
     self.status = 200
     display(env)
   end
