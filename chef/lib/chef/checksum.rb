@@ -55,8 +55,6 @@ class Chef
         :checksum => checksum,
         :create_time => create_time,
         :json_class => self.class.name,
-
-        # For Chef::CouchDB (id_to_name, name_to_id)
         :name => checksum
       }
     end

@@ -20,69 +20,29 @@ require 'uuidtools'
 
 class Chef
   class Sandbox
+    # Notes: guid is now id
+
     attr_accessor :is_completed, :create_time
     alias_method :is_completed?, :is_completed
     attr_reader :guid
     
     alias :name :guid
     
-    attr_accessor :couchdb, :couchdb_id, :couchdb_rev
+    attr_accessor :db
 
     # list of checksum ids
     attr_accessor :checksums
-
-    DESIGN_DOCUMENT = {
-      "version" => 1,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) { 
-            if (doc.chef_type == "sandbox") {
-              emit(doc.guid, doc);
-            }
-          }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "sandbox") {
-              emit(doc.guid, doc.guid);
-            }
-          }
-          EOJS
-        },
-        "all_incomplete" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "sandbox" && !doc.is_completed) {
-              emit(doc.guid, doc.guid);
-            }
-          }
-          EOJS
-        },
-        "all_completed" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "sandbox" && doc.is_completed) {
-              emit(doc.guid, doc.guid);
-            }
-          }
-          EOJS
-        },
-      }
-    }
     
     # Creates a new Chef::Sandbox object.  
-    #
-    # === Returns
-    # object<Chef::Sandbox>:: Duh. :)
-    def initialize(guid=nil, couchdb=nil)
+    def initialize(guid=nil)
       @guid = guid || UUIDTools::UUID.random_create.to_s.gsub(/\-/,'').downcase
       @is_completed = false
       @create_time = Time.now.iso8601
       @checksums = Array.new
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "sandbox")
     end
 
     def include?(checksum)
@@ -91,17 +51,19 @@ class Chef
 
     alias :member? :include?
 
-    def to_json(*a)
-      result = {
+    def to_json_obj(*a)
+      {
         :guid => guid,
         :name => name,   # same as guid, used for id_map
         :checksums => checksums,
         :create_time => create_time,
         :is_completed => is_completed,
         :json_class => self.class.name,
-        :chef_type => 'sandbox'
       }
-      result["_rev"] = @couchdb_rev if @couchdb_rev
+    end
+
+    def to_json(*a)
+      result = to_json_obj.merge({ :chef_type => "sandbox" })
       result.to_json(*a)
     end
 
@@ -110,44 +72,38 @@ class Chef
       sandbox.checksums = o['checksums']
       sandbox.create_time = o['create_time']
       sandbox.is_completed = o['is_completed']
-      if o.has_key?('_rev')
-        sandbox.couchdb_rev = o["_rev"]
-        o.delete("_rev")
-      end
+
       if o.has_key?("_id")
-        sandbox.couchdb_id = o["_id"]
-        #sandbox.index_id = sandbox.couchdb_id
+        sandbox.id = o["_id"]
         o.delete("_id")
       end
       sandbox
     end
 
-    ##
-    # Couchdb
-    ##
-    
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("sandboxes", DESIGN_DOCUMENT)
-    end
-    
-    def self.cdb_list(inflate=false, couchdb=nil)
-      rs = (couchdb || Chef::CouchDB.new).list("sandboxes", inflate)
-      lookup = (inflate ? "value" : "key")
-      rs["rows"].collect { |r| r[lookup] }            
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= get_default_db
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
+      db.list(inflate)
     end
 
-    def self.cdb_load(guid, couchdb=nil)
-      # Probably want to look for a view here at some point
-      (couchdb || Chef::CouchDB.new).load("sandbox", guid)
+    def self.cdb_load(guid, db=nil)
+      (db || Sandbox::get_default_db).load(guid)
     end
 
     def cdb_destroy
-      (couchdb || Chef::CouchDB.new).delete("sandbox", guid, @couchdb_rev)
+      (db || Sandbox::get_default_db).delete(guid)
     end
 
-    def cdb_save(couchdb=nil)
-      @couchdb_rev = (couchdb || Chef::CouchDB.new).store("sandbox", guid, self)["rev"]
+    def cdb_save(db=nil)
+      (db || Sandbox::get_default_db).store(guid, to_json_obj.merge(:_id => guid))
     end
-
   end
 end

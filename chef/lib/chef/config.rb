@@ -139,7 +139,7 @@ class Chef
     # Where cookbook files are stored on the server (by content checksum)
     checksum_path "/var/chef/checksums"
 
-    # CouchDB database name to use
+    # database name to use
     database "chef"
 
     db_loc "localhost:27017"
