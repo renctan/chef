@@ -54,34 +54,37 @@ class Chef
 
     DEPENDENCIES      = 'dependencies'.freeze
 
-    # Loads the full list of cookbooks, using a couchdb view to fetch
+    # Loads the full list of cookbooks, using a db view to fetch
     # only the id, name, version, and dependency constraints. This is
     # enough information to solve for the cookbook collection for a
     # given run list. After solving for the cookbook collection, you
     # need to call +load_full_versions_of+ to convert
     # MinimalCookbookVersion objects to their non-minimal counterparts
-    def self.load_all(couchdb)
+    def self.load_all(db)
       # Example:
       # {"id"=>"1a806f1c-b409-4d8e-abab-fa414ff5b96d", "key"=>"activemq", "value"=>{"version"=>"0.3.3", "deps"=>{"java"=>">= 0.0.0", "runit"=>">= 0.0.0"}}}
-      couchdb ||= Chef::CouchDB.new
-      couchdb.get_view("cookbooks", "all_with_version_and_deps")["rows"].map {|params| self.new(params) }
+      db ||= CookbookVersion::get_default_db
+      opt = { :fields => { "doc.version" => true, doc.metadata.dependencies => true }}
+      db.list(opt).to_a.map do |doc|
+        self.new({:version => doc.version, :deps => doc.metadata.dependencies})
+      end
     end
 
     # Loads the non-minimal CookbookVersion objects corresponding to
-    # +minimal_cookbook_versions+ from couchdb using a bulk GET.
-    def self.load_full_versions_of(minimal_cookbook_versions, couchdb)
-      database_ids = Array(minimal_cookbook_versions).map {|mcv| mcv.couchdb_id }
-      couchdb ||= Chef::CouchDB.new
-      couchdb.bulk_get(*database_ids)
+    # +minimal_cookbook_versions+ from db using a bulk GET.
+    def self.load_full_versions_of(minimal_cookbook_versions, db)
+      database_ids = Array(minimal_cookbook_versions).map {|mcv| mcv.id }
+      db ||= CookbookVersion::get_default_db
+      db.bulk_get(*database_ids).to_a
     end
 
-    attr_reader :couchdb_id
+    attr_reader :id
     attr_reader :name
     attr_reader :version
     attr_reader :deps
 
     def initialize(params)
-      @couchdb_id = params[ID]
+      @id = params[ID]
       @name = params[KEY]
       @version = params[VALUE][VERSION]
       @deps    = params[VALUE][DEPS]
@@ -118,134 +121,44 @@ class Chef
 
     COOKBOOK_SEGMENTS = [ :resources, :providers, :recipes, :definitions, :libraries, :attributes, :files, :templates, :root_files ]
 
-    DESIGN_DOCUMENT = {
-      "version" => 8,
-      "language" => "javascript",
-      "views" => {
-        "all" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.name, doc);
+    ALL_LATEST_MR_COLL = "mr.all_latest"
+    ALL_LATEST_ID_MR_COLL = "mr.all_latest_id"
+    ALL_LATEST_VERSION_MAP = "function() { emit(this.cookbook_name, this.version); }"
+    ALL_LATEST_VERSION_REDUCE = <<JS
+      function(keys, values) {
+        var result = null;
+
+        for (var idx in values) {
+          var value = values[idx];
+
+          if (idx == 0) {
+            result = value;
+            continue;
+          }
+
+          var valueParts = value.split('.').map(function(v) { return parseInt(v); });
+          var resultParts = result.split('.').map(function(v) { return parseInt(v); });
+
+          if (valueParts[0] != resultParts[0]) {
+            if (valueParts[0] > resultParts[0]) {
+              result = value;
             }
           }
-          EOJS
-        },
-        "all_id" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.name, doc.name);
+          else if (valueParts[1] != resultParts[1]) {
+            if (valueParts[1] > resultParts[1]) {
+              result = value;
             }
           }
-          EOJS
-        },
-        "all_with_version" => {
-          "map" => <<-EOJS
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.cookbook_name, doc.version);
+          else if (valueParts[2] != resultParts[2]) {
+            if (valueParts[2] > resultParts[2]) {
+              result = value;
             }
           }
-          EOJS
-        },
-        "all_with_version_and_deps" => {
-          "map" => <<-JS
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.cookbook_name, {version: doc.version, deps: doc.metadata.dependencies});
-            }
-          }
-          JS
-        },
-        "all_latest_version" => {
-          "map" => %q@
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.cookbook_name, doc.version);
-            }
-          }
-          @,
-          "reduce" => %q@
-          function(keys, values, rereduce) {
-            var result = null;
+        }
 
-            for (var idx in values) {
-              var value = values[idx];
-
-              if (idx == 0) {
-                result = value;
-                continue;
-              }
-
-              var valueParts = value.split('.').map(function(v) { return parseInt(v); });
-              var resultParts = result.split('.').map(function(v) { return parseInt(v); });
-
-              if (valueParts[0] != resultParts[0]) {
-                if (valueParts[0] > resultParts[0]) {
-                  result = value;
-                }
-              }
-              else if (valueParts[1] != resultParts[1]) {
-                if (valueParts[1] > resultParts[1]) {
-                  result = value;
-                }
-              }
-              else if (valueParts[2] != resultParts[2]) {
-                if (valueParts[2] > resultParts[2]) {
-                  result = value;
-                }
-              }
-            }
-            return result;
-          }
-          @
-        },
-        "all_latest_version_by_id" => {
-          "map" => %q@
-          function(doc) {
-            if (doc.chef_type == "cookbook_version") {
-              emit(doc.cookbook_name, {version: doc.version, id:doc._id});
-            }
-          }
-          @,
-          "reduce" => %q@
-          function(keys, values, rereduce) {
-            var result = null;
-
-            for (var idx in values) {
-              var value = values[idx];
-
-              if (idx == 0) {
-                result = value;
-                continue;
-              }
-
-              var valueParts = value.version.split('.').map(function(v) { return parseInt(v); });
-              var resultParts = result.version.split('.').map(function(v) { return parseInt(v); });
-
-              if (valueParts[0] != resultParts[0]) {
-                if (valueParts[0] > resultParts[0]) {
-                  result = value;
-                }
-              }
-              else if (valueParts[1] != resultParts[1]) {
-                if (valueParts[1] > resultParts[1]) {
-                  result = value;
-                }
-              }
-              else if (valueParts[2] != resultParts[2]) {
-                if (valueParts[2] > resultParts[2]) {
-                  result = value;
-                }
-              }
-            }
-            return result;
-          }
-          @
-        },
+        return result;
       }
-    }
+JS
 
     attr_accessor :root_dir
     attr_accessor :definition_filenames
@@ -259,10 +172,9 @@ class Chef
     attr_accessor :metadata
     attr_accessor :metadata_filenames
     attr_accessor :status
-    attr_accessor :couchdb_rev
-    attr_accessor :couchdb
+    attr_accessor :db
 
-    attr_reader :couchdb_id
+    attr_reader :id
 
     # attribute_filenames also has a setter that has non-default
     # functionality.
@@ -421,7 +333,7 @@ class Chef
     #
     # === Returns
     # object<Chef::CookbookVersion>:: Duh. :)
-    def initialize(name, couchdb=nil)
+    def initialize(name, db=nil)
       @name = name
       @frozen = false
       @attribute_filenames = Array.new
@@ -436,13 +348,16 @@ class Chef
       @metadata_filenames = Array.new
       @root_dir = nil
       @root_filenames = Array.new
-      @couchdb_id = nil
-      @couchdb = couchdb || Chef::CouchDB.new
-      @couchdb_rev = nil
+      @id = nil
+      @db = db || CookbookVersion::get_default_db
       @status = :ready
       @manifest = nil
       @file_vendor = nil
       @metadata = Chef::Cookbook::Metadata.new
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "cookbook_version")
     end
 
     def version
@@ -777,11 +692,15 @@ class Chef
     end
     private :preferences_for_path
 
-    def to_hash
+    def to_json_obj
       result = manifest.dup
       result['frozen?'] = frozen_version?
+      result
+    end
+
+    def to_hash
+      result = to_json_obj
       result['chef_type'] = 'cookbook_version'
-      result["_rev"] = couchdb_rev if couchdb_rev
       result.to_hash
     end
 
@@ -793,15 +712,13 @@ class Chef
 
     def self.json_create(o)
       cookbook_version = new(o["cookbook_name"])
-      if o.has_key?('_rev')
-        cookbook_version.couchdb_rev = o["_rev"] if o.has_key?("_rev")
-        o.delete("_rev")
-      end
+
       if o.has_key?("_id")
-        cookbook_version.couchdb_id = o["_id"] if o.has_key?("_id")
-        cookbook_version.index_id = cookbook_version.couchdb_id
+        cookbook_version.id = o["_id"] if o.has_key?("_id")
+        cookbook_version.index_id = cookbook_version.id
         o.delete("_id")
       end
+
       # We want the Chef::Cookbook::Metadata object to always be inflated
       cookbook_version.metadata = Chef::Cookbook::Metadata.from_hash(o["metadata"])
       cookbook_version.manifest = o
@@ -908,68 +825,106 @@ class Chef
       chef_server_rest.get_rest('cookbooks/_latest')
     end
 
-    ##
-    # Couchdb
-    ##
+    def self.cdb_by_name(cookbook_name, db=nil)
+      db ||= CookbookVersion::get_default_db
+      options = { :fields => { :_id => false, :cookbook_name => true, :version => true }}
+      rs = db.list(options).to_a
 
-    def self.cdb_by_name(cookbook_name, couchdb=nil)
-      cdb = (couchdb || Chef::CouchDB.new)
-      options = { :startkey => cookbook_name, :endkey => cookbook_name }
-      rs = cdb.get_view("cookbooks", "all_with_version", options)
-      rs["rows"].inject({}) { |memo, row| memo.has_key?(row["key"]) ? memo[row["key"]] << row["value"] : memo[row["key"]] = [ row["value"] ]; memo }
-    end
+      rs.inject({}) do |memo, row|
+        cookbook_name = row["cookbook_name"]
+        if memo.has_key?(cookbook_name) then
+          memo[cookbook_name] << row["version"]
+        else
+          memo[cookbook_name] = [ row["version"] ]
+        end
 
-    def self.create_design_document(couchdb=nil)
-      (couchdb || Chef::CouchDB.new).create_design_document("cookbooks", DESIGN_DOCUMENT)
-    end
-
-    def self.cdb_list_latest(inflate=false, couchdb=nil)
-      couchdb ||= Chef::CouchDB.new
-      if inflate
-        doc_ids = cdb_list_latest_ids.map {|i|i["id"]}
-        couchdb.bulk_get(doc_ids)
-      else
-        results = couchdb.get_view("cookbooks", "all_latest_version", :group=>true)["rows"]
-        results.inject({}) { |mapped, row| mapped[row["key"]] = row["value"]; mapped}
+        memo
       end
     end
 
-    def self.cdb_list_latest_ids(inflate=false, couchdb=nil)
-      couchdb ||= Chef::CouchDB.new
-      results = couchdb.get_view("cookbooks", "all_latest_version_by_id", :group=>true)["rows"]
-      results.map { |name_and_id| name_and_id["value"]}
-    end
+    def self.cdb_list_latest(inflate=false, db=nil)
+      db ||= CookbookVersion::get_default_db
 
-    def self.cdb_list(inflate=false, couchdb=nil)
-      couchdb ||= Chef::CouchDB.new
       if inflate
-        couchdb.list("cookbooks", true)["rows"].collect{|r| r["value"]}
+        doc_ids = cdb_list_latest_ids.map { |i| i["id"] }
+        db.bulk_get(doc_ids)
       else
-        # If you modify this, please make sure the desc sorted order on the versions doesn't get broken.
-        couchdb.get_view("cookbooks", "all_with_version")["rows"].inject({}) { |mapped, row| mapped[row["key"]]||=Array.new; mapped[row["key"]].push(Chef::Version.new(row["value"])); mapped[row["key"]].sort!.reverse!; mapped}
+        # TODO: modify schema to use indexes on name and version
+        res_coll = db.coll.map_reduce(ALL_LATEST_VERSION_MAP,
+                                      ALL_LATEST_VERSION_REDUCE,
+                                      { :out => { :replace => ALL_LATEST_MR_COLL }})
+
+        res_coll.find().to_a.inject({}) do |mapped, mr_result|
+          mapped[mr_result["_id"]] = mr_result["value"]
+          mapped
+        end
       end
     end
 
-    def self.cdb_load(name, version='latest', couchdb=nil)
-      cdb = couchdb || Chef::CouchDB.new
-      if version == "latest" || version == "_latest"
-        rs = cdb.get_view("cookbooks", "all_latest_version", :key => name, :descending => true, :group => true, :reduce => true)["rows"].first
-        cdb.load("cookbook_version", "#{rs["key"]}-#{rs["value"]}")
+    def self.cdb_list_latest_ids(inflate=false, db=nil)
+      db ||= CookbookVersion::get_default_db
+
+      # TODO: modify schema to use indexes on name and version
+      res_coll = db.coll.map_reduce(ALL_LATEST_VERSION_MAP,
+                                    ALL_LATEST_VERSION_REDUCE,
+                                    { :out => { :replace => ALL_LATEST_MR_COLL }})
+
+      res_coll.find().to_a.map { |result| result["value"] }
+    end
+
+    def self.cdb_list(inflate=false, db=nil)
+      db ||= CookbookVersion::get_default_db
+
+      if inflate
+        opt = { :fields => { :name => true, :_id => false }}
+        db.list(opt).to_a.map{ |r| r["name"]}
       else
-        cdb.load("cookbook_version", "#{name}-#{version}")
+        opt = { :fields => { :cookbook_name => true, :version => true }}
+
+        result = db.list(opt).to_a.inject({}) do |mapped, row|
+          k = row["name"]
+          mapped[k] ||= Array.new
+          mapped[k].push(Chef::Version.new(row["version"]))
+          mapped
+        end
+
+        result.each do |k, v|
+          result[k].sort!.reverse!
+        end
+
+        result
+      end
+    end
+
+    def self.cdb_load(name, version='latest', db=nil)
+      db ||= CookbookVersion::get_default_db
+
+      if version == "latest" || version == "_latest" then
+        # TODO: modify schema to use indexes on name and version
+        rs = db.coll.map_reduce(ALL_LATEST_VERSION_MAP,
+                                ALL_LATEST_MR_COLL,
+                                {
+                                  :out => { :inline => true },
+                                  :query => { :name => name },
+                                  :raw => true
+                                }).first
+
+        db.load("#{rs["_id"]}-#{rs["value"]}")
+      else
+        db.load("#{name}-#{version}")
       end
     end
 
     def cdb_destroy
-      (couchdb || Chef::CouchDB.new).delete("cookbook_version", full_name, couchdb_rev)
+      (db || CookbookVersion::get_default_db).delete(full_name)
     end
 
-    # Runs on Chef Server (API); deletes the cookbook from couchdb and also destroys associated
+    # Runs on Chef Server (API); deletes the cookbook from db and also destroys associated
     # checksum documents
     def purge
       checksums.keys.each do |checksum|
         begin
-          Chef::Checksum.cdb_load(checksum, couchdb).purge
+          Chef::Checksum.cdb_load(checksum, db).purge
         rescue Chef::Exceptions::CouchDBNotFound
         end
       end
@@ -977,11 +932,11 @@ class Chef
     end
 
     def cdb_save
-      @couchdb_rev = couchdb.store("cookbook_version", full_name, self)["rev"]
+      db.store(full_name, to_json_obj)
     end
 
-    def couchdb_id=(value)
-      @couchdb_id = value
+    def id=(value)
+      id = value
       @index_id = value
     end
 

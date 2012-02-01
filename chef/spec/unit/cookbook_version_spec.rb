@@ -65,8 +65,8 @@ end
 describe Chef::CookbookVersion do
   describe "when first created" do
     before do
-      @couchdb_driver = Chef::CouchDB.new
-      @cookbook_version = Chef::CookbookVersion.new("tatft", @couchdb_driver)
+      @db_driver = Chef::CookbookVersion.get_default_db
+      @cookbook_version = Chef::CookbookVersion.new("tatft", @db_driver)
     end
 
     it "has a name" do
@@ -114,12 +114,12 @@ describe Chef::CookbookVersion do
       @cookbook_version.should be_frozen_version
     end
 
-    it "has no couchdb id" do
-      @cookbook_version.couchdb_id.should be_nil
+    it "has no db id" do
+      @cookbook_version.id.should be_nil
     end
 
-    it "has the couchdb driver it was given on create" do
-      @cookbook_version.couchdb.should equal(@couchdb_driver)
+    it "has the db driver it was given on create" do
+      @cookbook_version.db.should equal(@db_driver)
     end
 
     it "is \"ready\"" do
@@ -404,15 +404,13 @@ describe Chef::CookbookVersion do
 
   describe "when deleting in the database" do
     before do
-      @couchdb_driver = Chef::CouchDB.new
-      @cookbook_version = Chef::CookbookVersion.new("tatft", @couchdb_driver)
+      @db_driver = Chef::CookbookVersion.get_default_db
+      @cookbook_version = Chef::CookbookVersion.new("tatft", @db_driver)
       @cookbook_version.version = "1.2.3"
-      @couchdb_rev = "_123456789"
-      @cookbook_version.couchdb_rev = @couchdb_rev
     end
 
-    it "deletes its document from couchdb" do
-      @couchdb_driver.should_receive(:delete).with("cookbook_version", "tatft-1.2.3", @couchdb_rev)
+    it "deletes its document from db" do
+      @db_driver.should_receive(:delete).with("tatft-1.2.3")
       @cookbook_version.cdb_destroy
     end
 
@@ -422,7 +420,7 @@ describe Chef::CookbookVersion do
 
       chksum_docs = checksums.map do |md5, path|
         cksum_doc = mock("Chef::Checksum for #{md5} at #{path}")
-        Chef::Checksum.should_receive(:cdb_load).with(md5, @couchdb_driver).and_return(cksum_doc)
+        Chef::Checksum.should_receive(:cdb_load).with(md5, @db_driver).and_return(cksum_doc)
         cksum_doc.should_receive(:purge)
         cksum_doc
       end
@@ -436,13 +434,13 @@ describe Chef::CookbookVersion do
 
       chksum_docs = checksums.map do |md5, path|
         cksum_doc = mock("Chef::Checksum for #{md5} at #{path}")
-        Chef::Checksum.should_receive(:cdb_load).with(md5, @couchdb_driver).and_return(cksum_doc)
+        Chef::Checksum.should_receive(:cdb_load).with(md5, @db_driver).and_return(cksum_doc)
         cksum_doc.should_receive(:purge)
         cksum_doc
       end
 
       missing_checksum = {"99999" => "/tmp/qux"}
-      Chef::Checksum.should_receive(:cdb_load).with("99999", @couchdb_driver).and_raise(Chef::Exceptions::CouchDBNotFound)
+      Chef::Checksum.should_receive(:cdb_load).with("99999", @db_driver).and_raise(Chef::Exceptions::CouchDBNotFound)
 
       @cookbook_version.stub!(:checksums).and_return(checksums.merge(missing_checksum))
 
