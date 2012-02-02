@@ -31,7 +31,7 @@ class Search < Application
   end
 
   def valid_indexes
-    indexes = Chef::DataBag.cdb_list(false)
+    indexes = Chef::DataBag.cdb_list(false).map { |data| data["name"] }
     indexes += %w{ role node client environment}
   end
 

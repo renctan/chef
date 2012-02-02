@@ -9,7 +9,13 @@ class Roles < Application
   # GET /roles
   def index
     @role_list = Chef::Role.cdb_list(true)
-    display(@role_list.inject({}) { |r,role| r[role.name] = absolute_url(:role, role.name); r })
+    list = @role_list.inject({}) do |r, role|
+      name = role["name"]
+      r[name] = absolute_url(:role, name)
+      r
+    end
+
+    display(list)
   end
 
   # GET /roles/:id

@@ -183,14 +183,8 @@ class Chef
     
     #return true if an admin user exists. this is pretty expensive (O(n)), should think of a better way (nuo)
     def self.admin_exist
-      users = self.cdb_list
-      users.each do |u|
-        user = self.cdb_load(u)
-        if user.admin
-          return user.name
-        end
-      end
-      nil
+      admin_user = get_default_db.find_one({ :admin => true })
+      admin_user["name"] unless admin_user.nil?
     end
     
     protected

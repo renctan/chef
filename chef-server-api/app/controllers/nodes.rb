@@ -31,9 +31,13 @@ class Nodes < Application
 
   def index
     @node_list = Chef::Node.cdb_list
-    display(@node_list.inject({}) do |r,n|
-      r[n] = absolute_url(:node, n); r
-    end)
+    list = @node_list.inject({}) do |r, n|
+      name = n["name"]
+      r[name] = absolute_url(:node, name)
+      r
+    end
+
+    display(list)
   end
 
   def show

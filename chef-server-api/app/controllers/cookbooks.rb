@@ -61,11 +61,15 @@ class Cookbooks < Application
     cookbook_list = Chef::CookbookVersion.cdb_list
     # cookbook_list is in the format of {"apache2" => [0.0.1, 0.0.0]} where the version numbers are DepSelector::Version objects
     num_versions = num_versions!
-    display(cookbook_list.inject({}) {|res, (cookbook_name, versions)|
-      versions = versions.map{ |x| DepSelector::Version.new(x) }.sort.reverse.map{ |x| x.to_s }
+
+    list = cookbook_list.inject({}) {|res, (cookbook_name, versions)|
+      versions = versions.map{ |x| DepSelector::Version.new(x) }
+      versions = versions.sort.reverse.map{ |x| x.to_s }
       res[cookbook_name] = expand_cookbook_urls(cookbook_name, versions, num_versions)
       res
-    })
+    end
+
+    display(list)
   end
 
   # GET /cookbooks
@@ -78,6 +82,7 @@ class Cookbooks < Application
   def index_09
     cookbook_list = Chef::CookbookVersion.cdb_list_latest(false).keys.sort
     response = Hash.new
+    # TODO: test!
     cookbook_list.map! do |cookbook_name|
       response[cookbook_name] = absolute_url(:cookbook, :cookbook_name => cookbook_name)
     end

@@ -32,7 +32,13 @@ class Environments < Application
   # GET /environments
   def index
     environment_list = Chef::Environment.cdb_list(true)
-    display(environment_list.inject({}) { |res, env| res[env.name] = absolute_url(:environment, env.name); res })
+    list = environment_list.inject({}) do |res, env|
+      name = env["name"]
+      res[name] = absolute_url(:environment, name)
+      res
+    end
+
+    display(list)
   end
 
   # GET /environments/:id

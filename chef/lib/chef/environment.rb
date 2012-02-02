@@ -237,7 +237,17 @@ class Chef
     end
 
     def self.cdb_list(inflate=false, db=nil)
-      (db || get_default_db).list(inflate)
+      db ||= get_default_db
+
+      # TODO: confirm if not showing _id is really the desired behavior
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
+      (db || get_default_db).list(opt)
     end
 
     def self.list(inflate=false)

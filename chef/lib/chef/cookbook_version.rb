@@ -888,6 +888,7 @@ JS
           mapped
         end
 
+        # TODO: check if really needed since sorting is already done in the app - dup work?
         result.each do |k, v|
           result[k].sort!.reverse!
         end

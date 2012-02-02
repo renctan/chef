@@ -30,11 +30,12 @@ class Sandboxes < Application
   include Merb::TarballHelper
   
   def index
-    couch_sandbox_list = Chef::Sandbox::cdb_list(true)
+    db_sandbox_list = Chef::Sandbox::cdb_list(true)
     
     sandbox_list = Hash.new
-    couch_sandbox_list.each do |sandbox|
-      sandbox_list[sandbox.guid] = absolute_url(:sandbox, :sandbox_id => sandbox.guid)
+    db_sandbox_list.each do |sandbox|
+      guid = sanbox["guid"]
+      sandbox_list[guid] = absolute_url(:sandbox, :sandbox_id => guid)
     end
     display sandbox_list
   end

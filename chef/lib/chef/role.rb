@@ -142,7 +142,11 @@ class Chef
     end
 
     def to_json_obj
-      env_run_lists_without_default = @env_run_lists.dup
+      env_run_lists_without_default = {}
+      @env_run_lists.each do |env, list|
+        env_run_lists_without_default[env] = list.to_a
+      end
+
       env_run_lists_without_default.delete("_default")
       
       {
@@ -151,7 +155,7 @@ class Chef
         'json_class' => self.class.name,
         "default_attributes" => @default_attributes,
         "override_attributes" => @override_attributes,
-        "run_list" => run_list,
+        "run_list" => run_list.map { |x| x.to_s },
         "env_run_lists" => env_run_lists_without_default
       }
     end

@@ -27,7 +27,13 @@ class Users < Application
   # GET to /users
   def index
     @user_list = Chef::WebUIUser.cdb_list
-    display(@user_list.inject({}) { |r,n| r[n] = absolute_url(:user, n); r })
+    list = @user_list.inject({}) do |r, n|
+      name = n["name"]
+      r[name] = absolute_url(:user, name)
+      r
+    end
+
+    display(list)
   end
 
   # GET to /users/:id

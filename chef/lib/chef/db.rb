@@ -158,7 +158,7 @@ class Chef
 
       # TODO: Confirm this is correct
       # Use from_json to deserialize special fields into the original object
-      Chef::JSONCompat.from_json(result)
+      Chef::JSONCompat.from_json(result.to_json)
     end
 
     # TODO: determine whether BSON::ObjectId() wrapping is needed
