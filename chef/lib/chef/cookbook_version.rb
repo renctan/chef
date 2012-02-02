@@ -356,6 +356,13 @@ JS
       @metadata = Chef::Cookbook::Metadata.new
     end
 
+    # Initializes the db
+    def self.init_db
+      # Creates the collection so map reduce won't complain about not being able
+      # to find the namespace.
+      get_default_db.create_collection("cookbook_version")
+    end
+
     def self.get_default_db
       Chef::DB.new(nil, "cookbook_version")
     end

@@ -112,9 +112,17 @@ class Chef
           msg << "(env_run_lists: #{env_run_lists.inspect})"
           raise Chef::Exceptions::InvalidEnvironmentRunListSpecification, msg
         end
+
         @env_run_lists.clear
-        env_run_lists.each { |k,v| @env_run_lists[k] = Chef::RunList.new(*Array(v))}
+        env_run_lists.each do |k,v|
+          run_list_array = Array(v)
+          run_list_array.reject! { |x| x.strip.empty? }
+
+          # TODO: Confirm if works correctly with Ruby 1.8
+          @env_run_lists[k] = Chef::RunList.new(*run_list_array)
+        end
       end
+
       @env_run_lists
     end
 
@@ -148,7 +156,7 @@ class Chef
       end
 
       env_run_lists_without_default.delete("_default")
-      
+
       {
         "name" => @name,
         "description" => @description,
@@ -184,7 +192,20 @@ class Chef
 
       # _default run_list is in 'run_list' for newer clients, and
       # 'recipes' for older clients.
-      env_run_list_hash = {"_default" => (o.has_key?("run_list") ? o["run_list"] : o["recipes"])}
+
+      default_list =
+        if o.has_key?("run_list") then
+          o["run_list"]
+        else
+          # TODO: confirm if correct behavior and figure out when
+          # can run_list be not part of the keys
+          o["recipes"]
+        end
+
+      default_run_list_obj = Chef::RunList.new
+      default_list.each { |x| default_run_list_obj << x }
+
+      env_run_list_hash = { "_default" => default_run_list_obj }
 
       # Clients before 0.10 do not include env_run_lists, so only
       # merge if it's there.

@@ -40,9 +40,12 @@ class Chef
 
     # Note: find replaces CouchDB#get_view, CouchDB#list
     def_delegators :@coll, :find, :find_one
+    def_delegators :@db, :create_collection
 
     MAX_RETRY_ATTEMPTS = Chef::Config[:http_retry_count]
     RETRY_DELAY = Chef::Config[:http_retry_delay]
+
+    attr_reader :coll
 
     def initialize(url, collection_name, opts = {})
       url ||= Chef::Config[:db_loc]
@@ -57,7 +60,7 @@ class Chef
       @db = args || @db
       @db.name
     end
-
+    
     # Saves the object to db. Add to index if the object supports it.
     #
     # === Returns

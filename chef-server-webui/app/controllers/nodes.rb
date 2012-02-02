@@ -19,7 +19,6 @@
 #
 
 require 'chef/node'
-require 'pp'
 
 class Nodes < Application
 
@@ -35,9 +34,6 @@ class Nodes < Application
       else
         node_hash = Chef::Node.list
       end
-
-      puts "node_hash:"
-      pp "node_hash.inspect}"
 
       @node_list = node_hash.keys.sort
     rescue => e

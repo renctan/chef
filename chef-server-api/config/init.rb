@@ -61,6 +61,8 @@ Merb::Config.use do |c|
   if Chef::Config[:log_location].kind_of?(String)
     c[:log_file] = Chef::Config[:log_location]
   end
+
+  Chef::CookbookVersion.init_db
 end
 
 unless Merb::Config.environment == "test"

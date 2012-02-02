@@ -62,7 +62,7 @@ class Cookbooks < Application
     # cookbook_list is in the format of {"apache2" => [0.0.1, 0.0.0]} where the version numbers are DepSelector::Version objects
     num_versions = num_versions!
 
-    list = cookbook_list.inject({}) {|res, (cookbook_name, versions)|
+    list = cookbook_list.inject({}) do |res, (cookbook_name, versions)|
       versions = versions.map{ |x| DepSelector::Version.new(x) }
       versions = versions.sort.reverse.map{ |x| x.to_s }
       res[cookbook_name] = expand_cookbook_urls(cookbook_name, versions, num_versions)
