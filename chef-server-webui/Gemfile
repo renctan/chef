@@ -2,3 +2,14 @@
 source :gemcutter
 #
 # gem "rails"
+
+gem "merb-core"
+gem "merb-haml"
+gem "merb-assets"
+gem "merb-helpers"
+gem "merb-param-protection"
+gem "coderay"
+gem "chef"
+gem "chef-solr"
+gem "ruby-openid"
+gem "thin"
