@@ -35,8 +35,6 @@ class Chef
     # to the pre-commit state.
     attr_reader :original_committed_file_location
 
-    DB = Chef::DB.new(nil, "checksum")
-    
     # Creates a new Chef::Checksum object.
     # === Arguments
     # checksum::: the MD5 content hash of the file
@@ -48,6 +46,10 @@ class Chef
       @checksum = checksum
       @original_committed_file_location = nil
       @storage = Storage::Filesystem.new(Chef::Config.checksum_path, checksum)
+    end
+
+    def self.get_default_db
+      Chef::DB.new(nil, "checksum")
     end
 
     def to_json_obj
@@ -110,7 +112,7 @@ class Chef
     ##
 
     def self.cdb_list(inflate=false, db=nil)
-      db ||= DB
+      db ||= get_default_db
 
       # TODO: confirm if not showing _id is really the desired behavior
       opt = 
@@ -124,24 +126,26 @@ class Chef
     end
     
     def self.cdb_all_checksums(db = nil)
-      cursor = (db || DB).list({})
+      result = (db || get_default_db).list({})
 
       hash_result = {}
-      cursor.each do |doc|
-        hash_result[doc["key"]] = 1
+      result.each do |doc|
+        hash_result[doc["name"]] = 1
       end
+
+      hash_result
     end
 
     def self.cdb_load(checksum, db=nil)
-      (db || DB).load(checksum)
+      (db || get_default_db).load(checksum)
     end
 
     def cdb_destroy(db=nil)
-      (db || DB).delete(checksum)
+      (db || Checksum::get_default_db).delete(checksum)
     end
 
     def cdb_save(db=nil)
-      (db || Chef::DB.new).store(to_json_obj)
+      (db || Checksum::get_default_db).store(to_json_obj)
     end
 
 

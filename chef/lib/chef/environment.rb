@@ -322,11 +322,18 @@ class Chef
 
       filtered_list = cookbook_list.inject({}) do |res, cookbook|
         # FIXME: should cookbook.version return a Chef::Version?
-        version               = Chef::Version.new(cookbook.version)
-        requirement_satisfied = version_constraints.has_key?(cookbook.name) ? version_constraints[cookbook.name].include?(version) : true
+        version = Chef::Version.new(cookbook["version"])
+        cookbook_name = cookbook["name"]
+        requirement_satisfied =
+          if version_constraints.has_key?(cookbook_name) then
+            version_constraints[cookbook_name].include?(version)
+          else
+            true
+          end
+
         # we want a key for every cookbook, even if no versions are available
-        res[cookbook.name] ||= []
-        res[cookbook.name] << cookbook if requirement_satisfied
+        res[cookbook_name] ||= []
+        res[cookbook_name] << cookbook if requirement_satisfied
         res
       end
 

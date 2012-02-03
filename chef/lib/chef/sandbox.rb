@@ -51,7 +51,7 @@ class Chef
 
     alias :member? :include?
 
-    def to_json_obj(*a)
+    def to_json_obj
       {
         :guid => guid,
         :name => name,   # same as guid, used for id_map
@@ -63,7 +63,7 @@ class Chef
     end
 
     def to_json(*a)
-      result = to_json_obj.merge({ :chef_type => "sandbox" })
+      result = to_json_obj.merge({ "chef_type" => "sandbox" })
       result.to_json(*a)
     end
 
@@ -73,10 +73,6 @@ class Chef
       sandbox.create_time = o['create_time']
       sandbox.is_completed = o['is_completed']
 
-      if o.has_key?("_id")
-        sandbox.id = o["_id"]
-        o.delete("_id")
-      end
       sandbox
     end
 
@@ -103,7 +99,7 @@ class Chef
     end
 
     def cdb_save(db=nil)
-      (db || Sandbox::get_default_db).store(guid, to_json_obj.merge(:_id => guid))
+      (db || Sandbox::get_default_db).store(to_json_obj.merge(:_id => guid))
     end
   end
 end

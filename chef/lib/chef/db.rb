@@ -66,7 +66,7 @@ class Chef
     # === Returns
     # The _id of the object
     def store(object)
-      name = object["name"]
+      name = object.has_key?("name")? object["name"] : object[:name]
 
       query_selector = { :name => name }
       @coll.update(query_selector, object, :upsert => true)

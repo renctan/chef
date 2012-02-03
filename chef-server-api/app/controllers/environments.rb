@@ -108,9 +108,10 @@ class Environments < Application
     rescue Chef::Exceptions::CouchDBNotFound
       raise NotFound, "Cannot load environment #{params[:environment_id]}"
     end
+
     num_versions = num_versions!
-    display(filtered_cookbooks.inject({}) {|res, (cookbook_name,versions)|
-      versions.map!{|v| v.version.to_s}
+    display(filtered_cookbooks.inject({}) {|res, (cookbook_name, versions)|
+      versions.map!{ |v| v["version"] }
       res[cookbook_name] = expand_cookbook_urls(cookbook_name, versions, num_versions)
       res
     })

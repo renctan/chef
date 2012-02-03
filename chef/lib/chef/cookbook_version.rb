@@ -883,8 +883,7 @@ JS
       db ||= CookbookVersion::get_default_db
 
       if inflate
-        opt = { :fields => { :name => true, :_id => false }}
-        db.list(opt).map{ |r| r["name"]}
+        db.list
       else
         opt = { :fields => { :cookbook_name => true, :version => true }}
 
@@ -940,7 +939,7 @@ JS
     end
 
     def cdb_save
-      db.store(full_name, to_json_obj)
+      db.store(to_json_obj)
     end
 
     def id=(value)
