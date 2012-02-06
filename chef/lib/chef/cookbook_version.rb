@@ -888,7 +888,7 @@ JS
         opt = { :fields => { :cookbook_name => true, :version => true }}
 
         result = db.list(opt).inject({}) do |mapped, row|
-          k = row["name"]
+          k = row["cookbook_name"]
           mapped[k] ||= Array.new
           mapped[k].push(Chef::Version.new(row["version"]))
           mapped
