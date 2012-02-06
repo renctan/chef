@@ -51,7 +51,8 @@ class DataBags < Application
                                :id => name)
       res
     end
-    display( })
+
+    display(list)
   end
 
   def create
