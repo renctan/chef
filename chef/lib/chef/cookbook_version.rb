@@ -849,6 +849,8 @@ JS
       end
     end
 
+    # === Returns
+    # An array of versions
     def self.cdb_list_latest(inflate=false, db=nil)
       db ||= CookbookVersion::get_default_db
 
@@ -868,6 +870,8 @@ JS
       end
     end
 
+    # === Returns
+    # An array of ids
     def self.cdb_list_latest_ids(inflate=false, db=nil)
       db ||= CookbookVersion::get_default_db
 

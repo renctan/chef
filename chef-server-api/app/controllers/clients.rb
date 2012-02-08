@@ -29,7 +29,7 @@ class Clients < Application
   
   # GET /clients
   def index
-    @list = Chef::ApiClient.cdb_list(true).map { |x| x["name"] }
+    @list = Chef::ApiClient.cdb_list(true).map { |x| x.name }
     display(@list.inject({}) { |result, element| result[element.name] = absolute_url(:client, :id => element.name); result })
   end
 

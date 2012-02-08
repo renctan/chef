@@ -458,7 +458,7 @@ class Chef
       db ||= get_default_db
 
       # Note: all docs created by this class have the chef_environment field
-      db.find({ :chef_environment => environment }, opt).to_a
+      db.list({ :chef_environment => environment }, opt)
     end
 
     def self.list_by_environment(environment, inflate=false)

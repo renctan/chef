@@ -10,7 +10,7 @@ class Roles < Application
   def index
     @role_list = Chef::Role.cdb_list(true)
     list = @role_list.inject({}) do |r, role|
-      name = role["name"]
+      name = role.name
       r[name] = absolute_url(:role, name)
       r
     end

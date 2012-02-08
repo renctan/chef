@@ -39,6 +39,7 @@ class Chef
     extend Forwardable
 
     # Note: find replaces CouchDB#get_view, CouchDB#list
+    # WARNING: Use with care as these do not automatically deserialize
     def_delegators :@coll, :find, :find_one
     def_delegators :@db, :create_collection
 
@@ -124,7 +125,7 @@ class Chef
     # === Returns
     # The array that contains the result
     def list(opt = {})
-      @coll.find({}, opt).to_a
+      deserialize(@coll.find({}, opt))
     end
 
     def has_key?(name)
@@ -168,7 +169,18 @@ class Chef
     # TODO: determine whether it makes sense to just return the cursor to 
     #   potentially conserve memory and improve latency
     def bulk_get(*to_fetch)
-      @coll.find({ "_id" => { "$in" => to_fetch.flatten } }).to_a
+      deserialize(@coll.find({ "_id" => { "$in" => to_fetch.flatten } }))
+    end
+
+    private
+    # Deserialize query results into an array of objects
+    def deserialize(cursor)
+      result = []
+      cursor.each do |doc|
+        result << Chef::JSONCompat.from_json(doc.to_json)
+      end
+
+      result
     end
 
     # Not needed in Mongo: 

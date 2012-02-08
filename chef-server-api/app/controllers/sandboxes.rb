@@ -34,7 +34,7 @@ class Sandboxes < Application
     
     sandbox_list = Hash.new
     db_sandbox_list.each do |sandbox|
-      guid = sanbox["guid"]
+      guid = sanbox.guid
       sandbox_list[guid] = absolute_url(:sandbox, :sandbox_id => guid)
     end
     display sandbox_list

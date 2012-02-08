@@ -322,8 +322,8 @@ class Chef
 
       filtered_list = cookbook_list.inject({}) do |res, cookbook|
         # FIXME: should cookbook.version return a Chef::Version?
-        version = Chef::Version.new(cookbook["version"])
-        cookbook_name = cookbook["cookbook_name"]
+        version = Chef::Version.new(cookbook.version)
+        cookbook_name = cookbook.name
         requirement_satisfied =
           if version_constraints.has_key?(cookbook_name) then
             version_constraints[cookbook_name].include?(version)

@@ -33,7 +33,7 @@ class Environments < Application
   def index
     environment_list = Chef::Environment.cdb_list(true)
     list = environment_list.inject({}) do |res, env|
-      name = env["name"]
+      name = env.name
       res[name] = absolute_url(:environment, name)
       res
     end
@@ -111,7 +111,7 @@ class Environments < Application
 
     num_versions = num_versions!
     display(filtered_cookbooks.inject({}) {|res, (cookbook_name, versions)|
-      versions.map!{ |v| v["version"] }
+      versions.map!{ |v| v.version }
       res[cookbook_name] = expand_cookbook_urls(cookbook_name, versions, num_versions)
       res
     })
@@ -135,7 +135,7 @@ class Environments < Application
 
     raise NotFound, "Cannot load cookbook #{cookbook_name}" unless filtered_cookbooks.has_key?(cookbook_name)
 
-    versions = filtered_cookbooks[cookbook_name].map{|v| v["version"].to_s}
+    versions = filtered_cookbooks[cookbook_name].map{|v| v.version.to_s}
     num_versions = num_versions!("all")
     display({ cookbook_name => expand_cookbook_urls(cookbook_name, versions, num_versions) })
   end
