@@ -28,12 +28,13 @@ describe "Nodes controller" do
 
   describe "when handling Node API calls" do
     it "returns a list of nodes" do
-      returned_node_list = ["node1", "node2"]
+      returned_node_list = [{ "name" => "node1" }, { "name" => "node2" }]
       Chef::Node.stub!(:cdb_list).and_return(returned_node_list)
 
       res = get_json("/nodes")
 
-      expected_response = returned_node_list.inject({}) do |res,node_name|
+      expected_response = returned_node_list.inject({}) do |res, doc|
+        node_name = doc["name"]
         res[node_name] = "#{root_url}/nodes/#{node_name}"
         res
       end

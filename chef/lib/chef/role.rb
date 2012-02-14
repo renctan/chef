@@ -105,6 +105,9 @@ class Chef
     end
 
     # Per environment run lists
+    #
+    # == Arguments
+    # env_run_lists:: hash of environment (String) to Chef::RunList or String
     def env_run_lists(env_run_lists=nil)
       if (!env_run_lists.nil?)
         unless env_run_lists.key?("_default")
@@ -114,9 +117,11 @@ class Chef
         end
 
         @env_run_lists.clear
-        env_run_lists.each do |k,v|
+        env_run_lists.each do |k, v|
           run_list_array = Array(v)
-          run_list_array.reject! { |x| x.strip.empty? }
+          run_list_array.reject! do |x|
+            x.class == String && x.strip.empty?
+          end
 
           # TODO: Confirm if works correctly with Ruby 1.8
           @env_run_lists[k] = Chef::RunList.new(*run_list_array)
@@ -192,7 +197,6 @@ class Chef
 
       # _default run_list is in 'run_list' for newer clients, and
       # 'recipes' for older clients.
-
       default_list =
         if o.has_key?("run_list") then
           o["run_list"]
@@ -203,7 +207,7 @@ class Chef
         end
 
       default_run_list_obj = Chef::RunList.new
-      default_list.each { |x| default_run_list_obj << x }
+      default_list.each { |x| default_run_list_obj << x } unless default_list.nil?
 
       env_run_list_hash = { "_default" => default_run_list_obj }
 
