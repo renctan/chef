@@ -202,7 +202,7 @@ class Chef
           { :fields => { "raw_data.id" => true, :_id => false }}
         end
 
-      @db.list(opt)
+      DataBagItem.get_default_db.list(opt)
     end
 
     # As a string

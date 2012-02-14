@@ -45,7 +45,7 @@ class DataBags < Application
     end
 
     list = @data_bag.list.inject({}) do |res, i|
-      name = i["name"]
+      name = i["raw_data"]["id"]
       res[name] = absolute_url(:data_bag_item,
                                :data_bag_id => @data_bag.name,
                                :id => name)
