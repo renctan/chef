@@ -43,7 +43,7 @@ class Cookbooks < Application
   include Merb::TarballHelper
 
   def index
-    if request.env['HTTP_X_CHEF_VERSION'] =~ /0\.9/
+    if request.env['HTTP_X_CHEF_VERSION'].start_with? "0.9."
       index_09
     else
       index_010
@@ -99,7 +99,7 @@ class Cookbooks < Application
   end
 
   def show_versions
-    if request.env['HTTP_X_CHEF_VERSION'] =~ /0\.9/
+    if request.env['HTTP_X_CHEF_VERSION'].start_with? "0.9."
       show_versions_09
     else
       show_versions_010
