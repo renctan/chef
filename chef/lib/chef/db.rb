@@ -58,7 +58,7 @@ class Chef
 
     # TODO: Should return namespace (ie, dbname + collname) instead?
     def database(arg=nil)
-      @db = args || @db
+      @db = arg || @db
       @db.name
     end
     
@@ -108,12 +108,15 @@ class Chef
         }
       )
 
-      object = find_by_name(name)
-      @coll.remove({ :name => name })
+      query_selector = { :name => name }
+
+      object = @coll.find_one(query_selector)
+      id = object["_id"]
+      @coll.remove(query_selector)
 
       if object.respond_to?(:delete_from_index)
         Chef::Log.info("Sending #{database}(#{id}) to the index queue for deletion..")
-        object.delete_from_index(:database => database, :id => object["_id"], :type => database)
+        object.delete_from_index(:database => database, :id => id, :type => database)
       end
     end
 
