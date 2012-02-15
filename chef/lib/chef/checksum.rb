@@ -130,7 +130,7 @@ class Chef
 
       hash_result = {}
       result.each do |doc|
-        hash_result[doc["name"]] = 1
+        hash_result[doc.checksum] = 1
       end
 
       hash_result
