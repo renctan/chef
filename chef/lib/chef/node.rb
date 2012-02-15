@@ -458,8 +458,15 @@ class Chef
     def self.cdb_list_by_environment(environment, inflate=false, db=nil)
       db ||= get_default_db
 
+      opt = 
+        if inflate then
+          {}
+        else
+          { :fields => { :name => true, :_id => false }}
+        end
+
       # Note: all docs created by this class have the chef_environment field
-      db.list({ :chef_environment => environment }, opt)
+      db.find_all({ :chef_environment => environment }, opt)
     end
 
     def self.list_by_environment(environment, inflate=false)

@@ -131,6 +131,10 @@ class Chef
       deserialize(@coll.find({}, opt))
     end
 
+    def find_all(query_selector, opt = {})
+      deserialize(@coll.find(query_selector, opt))
+    end
+
     def has_key?(name)
       validate(
         {
