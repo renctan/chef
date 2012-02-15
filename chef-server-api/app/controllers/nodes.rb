@@ -46,7 +46,7 @@ class Nodes < Application
     rescue Chef::Exceptions::CouchDBNotFound => e
       raise NotFound, "Cannot load node #{params[:id]}"
     end
-    @node.couchdb_rev = nil
+
     display @node
   end
 
@@ -71,7 +71,7 @@ class Nodes < Application
 
     @node.update_from!(params['inflated_object'])
     @node.cdb_save
-    @node.couchdb_rev = nil
+
     display(@node)
   end
 
