@@ -402,7 +402,8 @@ class Chef
         "normal" => normal_attrs,
         "default" => default_attrs,
         "override" => override_attrs,
-        "run_list" => run_list.run_list
+        #Render correctly for run_list items so malformed json does not result
+        "run_list" => run_list.run_list.map { |item| item.to_s }
       }
     end
 

@@ -168,8 +168,15 @@ class Chef
         'json_class' => self.class.name,
         "default_attributes" => @default_attributes,
         "override_attributes" => @override_attributes,
-        "run_list" => run_list.map { |x| x.to_s },
-        "env_run_lists" => env_run_lists_without_default
+        "chef_type" => "role",
+
+        #Render to_json correctly for run_list items (both run_list and evn_run_lists)
+        #so malformed json does not result
+        "run_list" => run_list.run_list.map { |item| item.to_s },
+        "env_run_lists" => env_run_lists_without_default.inject({}) do |accumulator, (k, v)|
+          accumulator[k] = v.map { |x| x.to_s }
+          accumulator
+        end
       }
     end
 
