@@ -45,13 +45,13 @@ class Chef
 
     include Comparable
 
-    ID   = "id".freeze
+    ID   = "_id".freeze
     NAME = 'name'.freeze
-    KEY  = 'key'.freeze
+    KEY  = 'cookbook_name'.freeze
     VERSION = 'version'.freeze
     VALUE   = 'value'.freeze
     DEPS    = 'deps'.freeze
-
+    METADATA = 'metadata'.freeze
     DEPENDENCIES      = 'dependencies'.freeze
 
     # Loads the full list of cookbooks, using a db view to fetch
@@ -62,12 +62,11 @@ class Chef
     # MinimalCookbookVersion objects to their non-minimal counterparts
     def self.load_all(db)
       # Example:
-      # {"id"=>"1a806f1c-b409-4d8e-abab-fa414ff5b96d", "key"=>"activemq", "value"=>{"version"=>"0.3.3", "deps"=>{"java"=>">= 0.0.0", "runit"=>">= 0.0.0"}}}
+      # {"_id"=>"1a806f1c-b409-4d8e-abab-fa414ff5b96d", "name"=>"activemq", "version"=>"0.3.3",
+      #  "metadata" => {"deps"=>{"java"=>">= 0.0.0", "runit"=>">= 0.0.0"}}}
+
       db ||= CookbookVersion::get_default_db
-      opt = { :fields => { "doc.version" => true, doc.metadata.dependencies => true }}
-      db.list(opt).map do |doc|
-        self.new({:version => doc.version, :deps => doc.metadata.dependencies})
-      end
+      db.find().map { |doc| self.new(doc) }
     end
 
     # Loads the non-minimal CookbookVersion objects corresponding to
@@ -86,8 +85,8 @@ class Chef
     def initialize(params)
       @id = params[ID]
       @name = params[KEY]
-      @version = params[VALUE][VERSION]
-      @deps    = params[VALUE][DEPS]
+      @version = params[VERSION]
+      @deps    = params[METADATA][DEPENDENCIES]
     end
 
     # Returns the Cookbook::MinimalMetadata object for this cookbook
